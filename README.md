@@ -62,6 +62,8 @@ npm install
 npm run dev        # starts the API on http://localhost:4000
 ```
 
+If you leave `MONGODB_URI` unset during local development, the API falls back to `mongodb://127.0.0.1:27017/afcpln`. Be sure a MongoDB instance is available there before starting the server.
+
 The server automatically runs database migrations via Mongoose models. The `/api/health` endpoint returns status and timestamp for quick diagnostics.
 
 ### Frontend setup

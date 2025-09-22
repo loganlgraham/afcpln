@@ -5,8 +5,7 @@ let connectionPromise;
 
 module.exports = async (req, res) => {
   if (!connectionPromise) {
-    const uri = process.env.MONGODB_URI;
-    connectionPromise = connectDatabase(uri).catch((error) => {
+    connectionPromise = connectDatabase().catch((error) => {
       connectionPromise = null;
       throw error;
     });

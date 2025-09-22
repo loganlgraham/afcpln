@@ -5,11 +5,10 @@ const app = require('./app');
 const { connectDatabase } = require('./config/database');
 
 const PORT = process.env.PORT || 4000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/afcpln';
 
 async function start() {
   try {
-    await connectDatabase(MONGODB_URI);
+    await connectDatabase();
     const server = http.createServer(app);
 
     server.listen(PORT, () => {
