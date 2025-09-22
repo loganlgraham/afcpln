@@ -1,0 +1,22 @@
+# Node
+node_modules/
+client/node_modules/
+server/node_modules/
+**/node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+client/dist/
+server/dist/
+.env
+server/.env
+client/.env
+coverage/
+.DS_Store
+
+# Logs
+logs
+*.log
+
+# Local data
+server/email-debug.log
