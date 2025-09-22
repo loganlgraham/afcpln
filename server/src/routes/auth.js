@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { getJwtSecret } = require('../config/jwt');
 
 const router = express.Router();
 
@@ -13,11 +14,7 @@ function buildTokenPayload(user) {
 }
 
 function generateToken(user) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('Missing JWT secret. Set JWT_SECRET in the environment.');
-  }
-
+  const secret = getJwtSecret();
   const payload = buildTokenPayload(user);
   return jwt.sign(payload, secret, { expiresIn: '12h' });
 }

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { getJwtSecret } = require('../config/jwt');
 
 function extractToken(headerValue) {
   if (!headerValue) {
@@ -22,11 +23,7 @@ async function authenticate(req, res, next) {
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      throw new Error('Missing JWT secret. Set JWT_SECRET in the environment.');
-    }
-
+    const secret = getJwtSecret();
     const payload = jwt.verify(token, secret);
     const user = await User.findById(payload.sub);
 
