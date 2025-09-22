@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { getJwtSecret } = require('../config/jwt');
+const { sendRegistrationEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -46,6 +47,12 @@ router.post('/register', async (req, res, next) => {
     const user = new User({ fullName, email, role: normalizedRole, phoneNumber, company });
     await user.setPassword(password);
     await user.save();
+
+    try {
+      await sendRegistrationEmail(user);
+    } catch (emailError) {
+      console.error('Failed to send registration confirmation email', emailError);
+    }
 
     const token = generateToken(user);
     res.status(201).json({ token, user: sanitizeUser(user) });

@@ -15,6 +15,13 @@ body {
   background: linear-gradient(180deg, #10172a 0%, #243b53 40%, #f4f6f8 40%, #f4f6f8 100%);
 }
 
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
 .hero {
   display: flex;
   justify-content: space-between;
@@ -102,7 +109,7 @@ body {
 
 .form {
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .form label {
@@ -132,6 +139,26 @@ body {
 
 .form textarea {
   resize: vertical;
+}
+
+.form-section {
+  background: rgba(16, 42, 67, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  padding: 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.form-section h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  color: #102a43;
+}
+
+.form button[type='submit'] {
+  justify-self: flex-start;
 }
 
 .form-grid {

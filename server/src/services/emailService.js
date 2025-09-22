@@ -50,6 +50,39 @@ async function sendListingMatchEmail(user, listing, search) {
   });
 }
 
+function buildRegistrationEmail(user) {
+  const safeUser =
+    user && typeof user.toObject === 'function' ? user.toObject({ virtuals: true }) : user;
+  const fullName = safeUser?.fullName || safeUser?.email || 'there';
+  const subject = 'Welcome to the AFC Private Listing Network';
+
+  const lines = [
+    `Hi ${fullName},`,
+    '',
+    'Thanks for joining the AFC Private Listing Network. Your account is ready to go.',
+    'Log in anytime to explore private listings, manage saved searches, and connect with listing agents.',
+    '',
+    'If you did not create this account, please ignore this email.'
+  ];
+
+  return {
+    to: safeUser?.email,
+    from: fromAddress,
+    subject,
+    text: lines.join('\n')
+  };
+}
+
+async function sendRegistrationEmail(user) {
+  const message = buildRegistrationEmail(user);
+  if (!message.to) {
+    return;
+  }
+
+  await transporter.sendMail(message);
+}
+
 module.exports = {
-  sendListingMatchEmail
+  sendListingMatchEmail,
+  sendRegistrationEmail
 };

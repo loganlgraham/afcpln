@@ -26,6 +26,60 @@ const state = {
   savedSearches: []
 };
 
+function setActiveTab(tabId = 'login') {
+  const tabs = Array.from(elements.tabs || []);
+  if (!tabs.length) {
+    return;
+  }
+
+  const validIds = tabs.map((tab) => tab.dataset.tab);
+  const activeId = validIds.includes(tabId) ? tabId : validIds[0];
+
+  tabs.forEach((tab) => {
+    const isActive = tab.dataset.tab === activeId;
+    tab.classList.toggle('active', isActive);
+    const panel = document.getElementById(tab.dataset.tab);
+    if (panel) {
+      panel.classList.toggle('active', isActive);
+    }
+  });
+}
+
+function toggleAgentOptionalFields(showAgentFields) {
+  elements.optionalFields.forEach((field) => {
+    field.style.display = showAgentFields ? 'grid' : 'none';
+  });
+}
+
+function clearAuthForms() {
+  if (elements.loginForm) {
+    removeAlert(elements.loginForm);
+    elements.loginForm.reset();
+  }
+
+  if (elements.registerForm) {
+    removeAlert(elements.registerForm);
+    elements.registerForm.reset();
+    const roleSelect = elements.registerForm.querySelector('select[name="role"]');
+    if (roleSelect) {
+      roleSelect.value = 'user';
+    }
+  }
+
+  toggleAgentOptionalFields(false);
+}
+
+function handleLogout() {
+  state.token = null;
+  state.user = null;
+  state.savedSearches = [];
+  state.listings = [];
+  saveAuthState();
+  clearAuthForms();
+  setActiveTab('login');
+  updateUI();
+}
+
 function saveAuthState() {
   if (state.token && state.user) {
     localStorage.setItem('afcpln_auth', JSON.stringify({ token: state.token, user: state.user }));
@@ -51,14 +105,7 @@ function updateUserStatus() {
 
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      state.token = null;
-      state.user = null;
-      state.savedSearches = [];
-      state.listings = [];
-      saveAuthState();
-      updateUI();
-    });
+    logoutBtn.addEventListener('click', handleLogout);
   }
 }
 
@@ -241,7 +288,16 @@ async function handleRegister(event) {
     saveAuthState();
     updateUI();
     elements.registerForm.reset();
-    showAlert(elements.registerForm, 'Account created successfully! You are now signed in.', 'success');
+    const roleSelect = elements.registerForm.querySelector('select[name="role"]');
+    if (roleSelect) {
+      roleSelect.value = 'user';
+    }
+    toggleAgentOptionalFields(false);
+    showAlert(
+      elements.registerForm,
+      'Account created successfully! Check your email for a confirmation message.',
+      'success'
+    );
   } catch (error) {
     showAlert(elements.registerForm, error.message);
   }
@@ -329,27 +385,35 @@ function handleFilterSubmit(event) {
 function initTabs() {
   elements.tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
-      elements.tabs.forEach((btn) => btn.classList.remove('active'));
-      elements.tabContents.forEach((panel) => panel.classList.remove('active'));
-      tab.classList.add('active');
-      const panel = document.getElementById(tab.dataset.tab);
-      if (panel) {
-        panel.classList.add('active');
-      }
+      setActiveTab(tab.dataset.tab);
     });
   });
+
+  const preselected = Array.from(elements.tabs).find((tab) => tab.classList.contains('active'));
+  if (preselected) {
+    setActiveTab(preselected.dataset.tab);
+  } else {
+    setActiveTab('login');
+  }
 }
 
 function initRoleFields() {
+  if (!elements.registerForm) {
+    return;
+  }
+
   const roleSelect = elements.registerForm.querySelector('select[name="role"]');
-  const toggleOptional = () => {
+  if (!roleSelect) {
+    return;
+  }
+
+  const applyRoleVisibility = () => {
     const showAgentFields = roleSelect.value === 'agent';
-    elements.optionalFields.forEach((field) => {
-      field.style.display = showAgentFields ? 'grid' : 'none';
-    });
+    toggleAgentOptionalFields(showAgentFields);
   };
-  roleSelect.addEventListener('change', toggleOptional);
-  toggleOptional();
+
+  roleSelect.addEventListener('change', applyRoleVisibility);
+  applyRoleVisibility();
 }
 
 function restoreAuth() {
