@@ -57,12 +57,14 @@ A full-stack web application for the AFC / AHA Private Listing Network where lis
 ```bash
 cd server
 cp .env.example .env
-# Update MONGODB_URI and JWT_SECRET in .env
+# Update MONGODB_URI, MONGODB_DB (if needed), and JWT_SECRET in .env
 npm install
 npm run dev        # starts the API on http://localhost:4000
 ```
 
 If you leave `MONGODB_URI` unset during local development, the API falls back to `mongodb://127.0.0.1:27017/afcpln`. Be sure a MongoDB instance is available there before starting the server.
+
+When your connection string does not include a database name (for example it ends in `/?retryWrites=true`), the server automatically attaches `afcpln`. Override this default by setting `MONGODB_DB` in your environment if you prefer a different database name.
 
 Likewise, the API now falls back to a built-in development JWT secret when `JWT_SECRET` is missing so you can register and sign in without any extra configuration. The server logs a warning when this happens—define a unique `JWT_SECRET` in `.env` (and in production environments) before launching to users.
 
@@ -83,7 +85,7 @@ If you prefer a standalone static host, copy `client/` to your provider of choic
 This repository now includes configuration for a zero-build Vercel deployment that serves the static UI and mounts the Express API as a serverless function.
 
 1. Push the repository to GitHub and import it into Vercel.
-2. Add environment variables named `MONGODB_URI` and `JWT_SECRET` in your Vercel project settings so the function can reach your MongoDB instance and issue tokens with a secret only you know.
+2. Add environment variables named `MONGODB_URI`, `JWT_SECRET`, and (when your URI omits the database) `MONGODB_DB` in your Vercel project settings so the function can reach your MongoDB instance and issue tokens with a secret only you know.
 3. Deploy. The included `vercel.json` rewrites requests under `/api/*` to the serverless handler in `api/index.js` and serves everything else from the `client/` directory.
 
 The root `package.json` uses npm workspaces so Vercel installs the API dependencies automatically. Local development workflows (`npm run dev`, `npm test`) continue to work exactly as before.
