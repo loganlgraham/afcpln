@@ -74,6 +74,16 @@ http://localhost:4000
 
 If you prefer a standalone static host, copy `client/` to your provider of choice and set the `SERVE_CLIENT=false` environment variable on the API so it only exposes JSON endpoints.
 
+### Vercel deployment
+
+This repository now includes configuration for a zero-build Vercel deployment that serves the static UI and mounts the Express API as a serverless function.
+
+1. Push the repository to GitHub and import it into Vercel.
+2. Add an environment variable named `MONGODB_URI` in your Vercel project settings so the function can reach your MongoDB instance.
+3. Deploy. The included `vercel.json` rewrites requests under `/api/*` to the serverless handler in `api/index.js` and serves everything else from the `client/` directory.
+
+The root `package.json` uses npm workspaces so Vercel installs the API dependencies automatically. Local development workflows (`npm run dev`, `npm test`) continue to work exactly as before.
+
 ### Running tests
 
 Integration tests cover authentication, listing creation, access control, and email logging.
