@@ -6,7 +6,7 @@
     <title>AFC Private Listing Network</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
+  <body data-initial-persona="buyer">
     <div class="page">
       <header class="page-header">
         <h1>AFC Private Listing Network</h1>
@@ -15,11 +15,40 @@
         </p>
       </header>
 
+      <section class="persona-toggle" aria-label="Select workspace focus">
+        <p class="persona-toggle__label">Show tools for</p>
+        <div class="persona-toggle__group" role="group" aria-label="Workspace selection">
+          <button
+            type="button"
+            class="persona-toggle__button is-active"
+            data-persona="buyer"
+            aria-pressed="true"
+          >
+            Buyers
+          </button>
+          <button
+            type="button"
+            class="persona-toggle__button"
+            data-persona="agent"
+            aria-pressed="false"
+          >
+            Agents
+          </button>
+        </div>
+        <p class="persona-toggle__helper">Switch between the buyer search tools and the agent listing workspace.</p>
+      </section>
+
       <main class="layout-grid">
-        <section class="form-card" aria-labelledby="list-property-heading">
+        <section
+          id="list-section"
+          class="form-card"
+          aria-labelledby="list-property-heading"
+          data-section="list"
+          hidden
+        >
           <div class="form-card__header">
             <h2 id="list-property-heading">List a Property</h2>
-            <p class="form-card__subtitle">Highlight the essentials to match eager buyers with your exclusive property.</p>
+            <p class="form-card__subtitle">Agents can highlight the essentials to match eager buyers with exclusive properties.</p>
           </div>
           <form id="list-property-form" class="form-grid" autocomplete="off">
             <div class="form-field">
@@ -72,10 +101,15 @@
           </form>
         </section>
 
-        <section class="form-card" aria-labelledby="find-listings-heading">
+        <section
+          id="find-section"
+          class="form-card"
+          aria-labelledby="find-listings-heading"
+          data-section="find"
+        >
           <div class="form-card__header">
             <h2 id="find-listings-heading">Find Private Listings</h2>
-            <p class="form-card__subtitle">Refine the map to surface the latest off-market opportunities.</p>
+            <p class="form-card__subtitle">Buyers can refine the map to surface the latest off-market opportunities.</p>
           </div>
           <form id="find-listings-form" class="form-grid" autocomplete="off">
             <div class="form-field">

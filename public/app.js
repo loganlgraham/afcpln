@@ -10,14 +10,23 @@ const listingsContainer = document.getElementById('listing-results');
 const emptyState = document.getElementById('listing-empty-state');
 const resultsSummary = document.getElementById('results-summary');
 const refreshButton = document.getElementById('refresh-listings');
+const personaButtons = Array.from(document.querySelectorAll('[data-persona]'));
+const listSection = document.querySelector('[data-section="list"]');
+const findSection = document.querySelector('[data-section="find"]');
+const initialPersona = document.body?.dataset?.initialPersona === 'agent' ? 'agent' : 'buyer';
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10 MB
+const DEFAULT_LISTING_SUMMARIES = {
+  buyer: 'Recently added properties appear here. Use filters to refine your matches.',
+  agent: 'Recently added properties appear here. Share your latest off-market opportunities with buyers.'
+};
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
   maximumFractionDigits: 0
 });
 
+let activePersona = initialPersona;
 let cachedListings = [];
 
 function setFormMessage(element, message, type = 'info') {
@@ -54,6 +63,52 @@ function setLoadingState(button, isLoading, loadingText) {
 
 function normaliseValue(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function getDefaultSummary() {
+  return DEFAULT_LISTING_SUMMARIES[activePersona] || DEFAULT_LISTING_SUMMARIES.buyer;
+}
+
+async function fetchJson(input, init) {
+  let response;
+  try {
+    response = await fetch(input, init);
+  } catch (error) {
+    console.error('Network request failed:', error);
+    throw new Error('Could not reach the server. Please try again in a moment.');
+  }
+
+  const rawText = await response.text();
+  let data = null;
+
+  if (rawText) {
+    try {
+      data = JSON.parse(rawText);
+    } catch (error) {
+      data = null;
+    }
+  }
+
+  if (!response.ok) {
+    const trimmed = rawText.trim();
+    if (data && typeof data === 'object' && data !== null && typeof data.error === 'string' && data.error) {
+      throw new Error(data.error);
+    }
+    if (trimmed) {
+      console.error('Request failed with non-JSON response:', trimmed);
+    }
+    throw new Error(`Request failed with status ${response.status}. Please try again later.`);
+  }
+
+  if (data === null || typeof data !== 'object') {
+    const trimmed = rawText.trim();
+    if (trimmed) {
+      console.error('Unexpected non-JSON response:', trimmed);
+    }
+    throw new Error('Unexpected response from the server. Please try again later.');
+  }
+
+  return data;
 }
 
 async function fileToBase64Payload(file) {
@@ -284,13 +339,9 @@ async function loadListings() {
     setLoadingState(refreshButton, true, 'Refreshing...');
   }
   try {
-    const response = await fetch('/api/listings');
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || 'Unable to load listings.');
-    }
+    const data = await fetchJson('/api/listings');
     cachedListings = Array.isArray(data.listings) ? data.listings : [];
-    renderListings(cachedListings, 'Recently added properties appear here. Use filters to refine your matches.');
+    renderListings(cachedListings, getDefaultSummary());
   } catch (error) {
     console.error('Failed to load listings:', error);
     renderListings([], 'We could not load listings at the moment. Please try refreshing.');
@@ -339,14 +390,13 @@ async function handleListFormSubmit(event) {
   }
 
   try {
-    const response = await fetch('/api/listings', {
+    const data = await fetchJson('/api/listings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || 'We could not save this listing.');
+    if (!data.listing || typeof data.listing !== 'object') {
+      throw new Error('We could not save this listing. Please try again.');
     }
     cachedListings = [data.listing, ...cachedListings];
     renderListings(cachedListings, 'Listing published!');
@@ -379,15 +429,11 @@ async function handleFindFormSubmit(event) {
   };
 
   try {
-    const response = await fetch('/api/listings/search', {
+    const data = await fetchJson('/api/listings/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || 'Filters could not be applied.');
-    }
     const results = Array.isArray(data.results) ? data.results : [];
     renderListings(results, results.length ? `Found ${results.length} matching ${results.length === 1 ? 'listing' : 'listings'}.` : 'No listings matched your filters. Try widening your search.');
     setFormMessage(findMessage, results.length ? 'Filters applied.' : 'No listings matched your filters.', results.length ? 'success' : 'error');
@@ -406,6 +452,39 @@ function handleFindFormReset() {
   }, 0);
 }
 
+function applyPersona(persona) {
+  const targetPersona = persona === 'agent' ? 'agent' : 'buyer';
+  activePersona = targetPersona;
+
+  personaButtons.forEach(button => {
+    const isActive = button.dataset.persona === targetPersona;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', String(isActive));
+  });
+
+  if (document.body) {
+    document.body.dataset.activePersona = targetPersona;
+  }
+
+  if (listSection) {
+    listSection.hidden = targetPersona !== 'agent';
+  }
+
+  if (findSection) {
+    findSection.hidden = targetPersona !== 'buyer';
+  }
+
+  if (targetPersona === 'agent') {
+    setFormMessage(findMessage, '');
+  } else {
+    setFormMessage(listMessage, '');
+  }
+
+  if (resultsSummary && (!listingsContainer || listingsContainer.children.length === 0)) {
+    resultsSummary.textContent = getDefaultSummary();
+  }
+}
+
 async function handleRegisterSubmit(event) {
   event.preventDefault();
   setFormMessage(registerMessage, '');
@@ -420,15 +499,11 @@ async function handleRegisterSubmit(event) {
   };
 
   try {
-    const response = await fetch('/api/register', {
+    const data = await fetchJson('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || 'Registration failed.');
-    }
     setFormMessage(registerMessage, data.message || 'Registration successful!', 'success');
     registerForm.reset();
   } catch (error) {
@@ -464,6 +539,19 @@ if (registerForm) {
     setTimeout(() => setFormMessage(registerMessage, ''), 0);
   });
 }
+
+if (personaButtons.length) {
+  personaButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const persona = button.dataset.persona === 'agent' ? 'agent' : 'buyer';
+      if (persona !== activePersona) {
+        applyPersona(persona);
+      }
+    });
+  });
+}
+
+applyPersona(initialPersona);
 
 if (refreshButton) {
   refreshButton.addEventListener('click', loadListings);
