@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AFC Private Listing Network</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="page-header">
+        <h1>AFC Private Listing Network</h1>
+        <p class="page-tagline">
+          Manage exclusive off-market listings, surface hidden opportunities, and welcome new buyers in one streamlined workspace.
+        </p>
+      </header>
+
+      <main class="layout-grid">
+        <section class="form-card" aria-labelledby="list-property-heading">
+          <div class="form-card__header">
+            <h2 id="list-property-heading">List a Property</h2>
+            <p class="form-card__subtitle">Highlight the essentials to match eager buyers with your exclusive property.</p>
+          </div>
+          <form id="list-property-form" class="form-grid" autocomplete="off">
+            <div class="form-field">
+              <label for="property-title">Title</label>
+              <input id="property-title" name="title" type="text" placeholder="Modern Downtown Condo" required />
+            </div>
+            <div class="form-field">
+              <label for="property-area">Area / Neighborhood</label>
+              <input id="property-area" name="area" type="text" placeholder="North Loop" required />
+            </div>
+            <div class="form-field">
+              <label for="property-city">City</label>
+              <input id="property-city" name="city" type="text" placeholder="Minneapolis" required />
+            </div>
+            <div class="form-field">
+              <label for="property-state">State</label>
+              <input id="property-state" name="state" type="text" placeholder="MN" maxlength="2" required />
+            </div>
+            <div class="form-field">
+              <label for="property-price">Price</label>
+              <input id="property-price" name="price" type="number" inputmode="decimal" min="0" step="1000" placeholder="450000" required />
+            </div>
+            <div class="form-field">
+              <label for="property-bedrooms">Bedrooms</label>
+              <input id="property-bedrooms" name="bedrooms" type="number" min="0" step="1" placeholder="3" />
+            </div>
+            <div class="form-field">
+              <label for="property-bathrooms">Bathrooms</label>
+              <input id="property-bathrooms" name="bathrooms" type="number" min="0" step="0.5" placeholder="2" />
+            </div>
+            <div class="form-field">
+              <label for="property-square-feet">Square Feet</label>
+              <input id="property-square-feet" name="squareFeet" type="number" min="0" step="50" placeholder="1800" />
+            </div>
+            <div class="form-field form-field--full">
+              <label for="property-description">Description</label>
+              <textarea id="property-description" name="description" rows="4" placeholder="Highlight the best features and nearby amenities."></textarea>
+            </div>
+            <div class="form-field form-field--full">
+              <label for="property-photo">Property Photo</label>
+              <input id="property-photo" name="photo" type="file" accept="image/*" />
+              <p class="field-hint">Upload a single, high-quality image (JPG, PNG, GIF, WEBP). 10MB limit.</p>
+              <div id="photo-preview" class="photo-preview" hidden></div>
+            </div>
+            <div class="form-actions form-field--full">
+              <button type="submit" class="button button--primary">Publish Listing</button>
+              <button type="reset" class="button button--ghost">Reset</button>
+            </div>
+            <p id="list-property-message" class="form-message form-field--full" role="status" aria-live="polite"></p>
+          </form>
+        </section>
+
+        <section class="form-card" aria-labelledby="find-listings-heading">
+          <div class="form-card__header">
+            <h2 id="find-listings-heading">Find Private Listings</h2>
+            <p class="form-card__subtitle">Refine the map to surface the latest off-market opportunities.</p>
+          </div>
+          <form id="find-listings-form" class="form-grid" autocomplete="off">
+            <div class="form-field">
+              <label for="search-area">Area / Neighborhood</label>
+              <input id="search-area" name="area" type="text" placeholder="North Loop" />
+            </div>
+            <div class="form-field">
+              <label for="search-city">City</label>
+              <input id="search-city" name="city" type="text" placeholder="Minneapolis" />
+            </div>
+            <div class="form-field">
+              <label for="search-state">State</label>
+              <input id="search-state" name="state" type="text" placeholder="MN" maxlength="2" />
+            </div>
+            <div class="form-field">
+              <label for="search-min-price">Min Price</label>
+              <input id="search-min-price" name="minPrice" type="number" inputmode="decimal" min="0" step="1000" placeholder="200000" />
+            </div>
+            <div class="form-field">
+              <label for="search-max-price">Max Price</label>
+              <input id="search-max-price" name="maxPrice" type="number" inputmode="decimal" min="0" step="1000" placeholder="900000" />
+            </div>
+            <div class="form-field">
+              <label for="search-bedrooms">Bedrooms</label>
+              <input id="search-bedrooms" name="bedrooms" type="number" min="0" step="1" placeholder="3" />
+            </div>
+            <div class="form-field">
+              <label for="search-bathrooms">Bathrooms</label>
+              <input id="search-bathrooms" name="bathrooms" type="number" min="0" step="0.5" placeholder="2" />
+            </div>
+            <div class="form-actions form-field--full">
+              <button type="submit" class="button button--primary">Apply Filters</button>
+              <button type="reset" class="button button--ghost">Clear</button>
+            </div>
+            <p id="find-listings-message" class="form-message form-field--full" role="status" aria-live="polite"></p>
+          </form>
+        </section>
+
+        <section class="form-card" aria-labelledby="register-heading">
+          <div class="form-card__header">
+            <h2 id="register-heading">Register New Member</h2>
+            <p class="form-card__subtitle">Invite buyers and agents to receive instant confirmation when they join.</p>
+          </div>
+          <form id="register-form" class="form-grid form-grid--single" autocomplete="off">
+            <div class="form-field">
+              <label for="register-name">Full Name</label>
+              <input id="register-name" name="name" type="text" placeholder="Jordan Smith" required />
+            </div>
+            <div class="form-field">
+              <label for="register-email">Email</label>
+              <input id="register-email" name="email" type="email" placeholder="jordan@example.com" required />
+            </div>
+            <div class="form-field">
+              <label for="register-password">Password</label>
+              <input id="register-password" name="password" type="password" minlength="8" placeholder="Create a secure password" required />
+            </div>
+            <div class="form-actions form-field--full">
+              <button type="submit" class="button button--primary">Create Account</button>
+              <button type="reset" class="button button--ghost">Reset</button>
+            </div>
+            <p id="register-message" class="form-message form-field--full" role="status" aria-live="polite"></p>
+          </form>
+        </section>
+      </main>
+
+      <section class="results-card" aria-labelledby="results-heading">
+        <div class="results-card__header">
+          <div>
+            <h2 id="results-heading">Latest Listings</h2>
+            <p id="results-summary" class="results-card__summary">Recently added properties appear here. Use filters to refine your matches.</p>
+          </div>
+          <button id="refresh-listings" class="button button--ghost" type="button">Refresh</button>
+        </div>
+        <div id="listing-results" class="listing-grid" role="list"></div>
+        <p id="listing-empty-state" class="empty-state" hidden>No listings yet. Be the first to add a property!</p>
+      </section>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
