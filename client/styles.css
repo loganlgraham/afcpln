@@ -26,6 +26,8 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  flex-wrap: wrap;
+  gap: clamp(1.75rem, 4vw, 3.5rem);
   padding: 3.5rem clamp(2rem, 6vw, 6rem) 4rem;
   color: #f8fafc;
 }
@@ -44,12 +46,43 @@ button {
 }
 
 .hero__status {
-  background-color: rgba(15, 23, 42, 0.35);
-  padding: 1rem 1.25rem;
-  border-radius: 12px;
-  min-width: 220px;
-  text-align: right;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.55), rgba(11, 114, 133, 0.5));
+  padding: 1.25rem 1.5rem;
+  border-radius: 18px;
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: left;
   font-weight: 500;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(6px);
+}
+
+.status-details {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.status-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #f8fafc;
+}
+
+.status-role {
+  font-size: 0.9rem;
+  color: rgba(248, 250, 252, 0.78);
+  letter-spacing: 0.02em;
+}
+
+.hero__status--guest {
+  align-items: flex-start;
+}
+
+.hero__status .btn {
+  margin: 0;
 }
 
 .container {
@@ -73,6 +106,25 @@ button {
   margin-top: 0;
   letter-spacing: 0.03em;
   color: #102a43;
+}
+
+.card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.card__subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.95rem;
+  color: #486581;
+  max-width: 460px;
+}
+
+.card--search {
+  padding: 2.5rem;
 }
 
 .tabs {
@@ -178,6 +230,67 @@ button {
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
+.search-layout {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(250px, 320px) 1fr;
+  align-items: start;
+}
+
+.search-panel {
+  position: relative;
+  background: radial-gradient(circle at top right, rgba(28, 146, 210, 0.16), transparent 45%),
+    rgba(16, 42, 67, 0.05);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  padding: 1.75rem;
+  display: grid;
+  gap: 1.5rem;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
+}
+
+.search-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(15, 111, 222, 0.12), transparent 55%);
+  pointer-events: none;
+}
+
+.search-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.search-panel label {
+  color: #102a43;
+}
+
+.listing-results {
+  position: relative;
+  min-height: 220px;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  padding: 1.5rem;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.listing-results::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(15, 111, 222, 0.1), transparent 55%);
+  pointer-events: none;
+}
+
+.listing-results > * {
+  position: relative;
+  z-index: 1;
+}
+
 .btn {
   align-self: flex-start;
   padding: 0.65rem 1.5rem;
@@ -196,6 +309,18 @@ button {
   box-shadow: 0 12px 24px rgba(28, 146, 210, 0.3);
 }
 
+.btn--ghost {
+  background-color: rgba(248, 250, 252, 0.12);
+  color: #f8fafc;
+  border: 1px solid rgba(248, 250, 252, 0.45);
+  box-shadow: none;
+}
+
+.btn--ghost:hover {
+  background-color: rgba(248, 250, 252, 0.24);
+  color: #f8fafc;
+}
+
 .btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 16px 28px rgba(15, 23, 42, 0.14);
@@ -203,8 +328,9 @@ button {
 
 .listing-grid {
   display: grid;
-  gap: 1rem;
-  margin-top: 1.5rem;
+  gap: 1.25rem;
+  margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .listing {
@@ -317,10 +443,29 @@ button {
 
   .hero__status {
     width: 100%;
-    text-align: left;
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .container {
     margin-top: -2.5rem;
+  }
+
+  .card--search {
+    padding: 2rem;
+  }
+
+  .card__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .search-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .listing-results {
+    padding: 1.25rem;
   }
 }

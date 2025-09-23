@@ -17,7 +17,7 @@ A full-stack web application for the AFC / AHA Private Listing Network where lis
 |---------|------------|
 | API     | Node.js, Express, Mongoose, JSON Web Tokens |
 | Database| MongoDB |
-| Email   | Nodemailer (JSON transport + Mongo audit log) |
+| Email   | Nodemailer (configurable SMTP with JSON fallback + Mongo audit log) |
 | Frontend| Vanilla JS, modular ES builds, modern CSS |
 | Testing | Jest, Supertest, mongodb-memory-server |
 
@@ -57,7 +57,8 @@ A full-stack web application for the AFC / AHA Private Listing Network where lis
 ```bash
 cd server
 cp .env.example .env
-# Update MONGODB_URI, MONGODB_DB (if needed), and JWT_SECRET in .env
+# Update MONGODB_URI, MONGODB_DB (if needed), JWT_SECRET, and EMAIL_FROM in .env
+# Provide SMTP_URL or SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS to deliver live email
 npm install
 npm run dev        # starts the API on http://localhost:4000
 ```
@@ -67,6 +68,8 @@ If you leave `MONGODB_URI` unset during local development, the API falls back to
 When your connection string does not include a database name (for example it ends in `/?retryWrites=true`), the server automatically attaches `afcpln`. Override this default by setting `MONGODB_DB` in your environment if you prefer a different database name.
 
 Likewise, the API now falls back to a built-in development JWT secret when `JWT_SECRET` is missing so you can register and sign in without any extra configuration. The server logs a warning when this happens—define a unique `JWT_SECRET` in `.env` (and in production environments) before launching to users.
+
+Email notifications default to Nodemailer’s JSON transport so you can inspect payloads during development without delivering real messages. To enable live delivery, either set `SMTP_URL` to your provider’s connection string (for example, `smtps://user:pass@smtp.sendgrid.net`) or configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS`. Toggle `SMTP_SECURE=true` for explicit TLS, or leave it blank to infer from the port. If you need to force JSON mode—even with SMTP credentials available—set `EMAIL_TRANSPORT=json`.
 
 The server automatically runs database migrations via Mongoose models. The `/api/health` endpoint returns status and timestamp for quick diagnostics.
 
@@ -113,7 +116,7 @@ Refer to the source inside `server/src/routes` for full request/response schemas
 
 ## Email notifications
 
-The project uses Nodemailer’s JSON transport by default so development and automated tests log email payloads instead of sending live emails. Messages are recorded in the `EmailLog` collection for transparency. Configure a real SMTP transport in `server/src/services/emailService.js` to integrate with production mail providers.
+The project uses Nodemailer’s JSON transport by default so development and automated tests log email payloads instead of sending live emails. Messages are recorded in the `EmailLog` collection for transparency. Provide `SMTP_URL` or the `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` credentials (plus `SMTP_SECURE=true` when needed) to switch to your SMTP provider. The server logs a reminder when JSON mode is active so you know emails are not being delivered.
 
 ## Deployment notes
 

@@ -65,37 +65,46 @@
         </div>
       </section>
 
-      <section class="card" id="listing-search" hidden>
-        <h2>Find Private Listings</h2>
-        <form id="filters" class="filters">
-          <div class="filter-group">
-            <label>Area
-              <input type="text" name="area" placeholder="North Loop" />
-            </label>
-            <label>City
-              <input type="text" name="city" placeholder="Minneapolis" />
-            </label>
-            <label>State
-              <input type="text" name="state" placeholder="MN" maxlength="2" />
-            </label>
+      <section class="card card--search" id="listing-search" hidden>
+        <div class="card__header">
+          <div>
+            <h2>Find Private Listings</h2>
+            <p class="card__subtitle">Refine the map to surface the latest off-market opportunities.</p>
           </div>
-          <div class="filter-group">
-            <label>Min Price
-              <input type="number" name="minPrice" min="0" step="1000" />
-            </label>
-            <label>Max Price
-              <input type="number" name="maxPrice" min="0" step="1000" />
-            </label>
-            <label>Bedrooms
-              <input type="number" name="minBedrooms" min="0" />
-            </label>
-            <label>Bathrooms
-              <input type="number" name="minBathrooms" min="0" step="0.5" />
-            </label>
+        </div>
+        <div class="search-layout">
+          <form id="filters" class="filters search-panel">
+            <div class="filter-group">
+              <label>Area
+                <input type="text" name="area" placeholder="North Loop" />
+              </label>
+              <label>City
+                <input type="text" name="city" placeholder="Minneapolis" />
+              </label>
+              <label>State
+                <input type="text" name="state" placeholder="MN" maxlength="2" />
+              </label>
+            </div>
+            <div class="filter-group">
+              <label>Min Price
+                <input type="number" name="minPrice" min="0" step="1000" />
+              </label>
+              <label>Max Price
+                <input type="number" name="maxPrice" min="0" step="1000" />
+              </label>
+              <label>Bedrooms
+                <input type="number" name="minBedrooms" min="0" />
+              </label>
+              <label>Bathrooms
+                <input type="number" name="minBathrooms" min="0" step="0.5" />
+              </label>
+            </div>
+            <button type="submit" class="btn primary">Apply Filters</button>
+          </form>
+          <div class="listing-results">
+            <div id="listings" class="listing-grid" aria-live="polite"></div>
           </div>
-          <button type="submit" class="btn">Apply Filters</button>
-        </form>
-        <div id="listings" class="listing-grid" aria-live="polite"></div>
+        </div>
       </section>
 
       <section class="card" id="agent-tools" hidden>

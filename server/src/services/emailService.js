@@ -3,9 +3,84 @@ const EmailLog = require('../models/EmailLog');
 
 const fromAddress = process.env.EMAIL_FROM || 'no-reply@afcpln.local';
 
-const transporter = nodemailer.createTransport({
-  jsonTransport: true
-});
+let transportMetadata = { type: 'json' };
+
+function normalizeBool(value, fallback = false) {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  const lowered = String(value).toLowerCase().trim();
+  if (['true', '1', 'yes', 'y'].includes(lowered)) {
+    return true;
+  }
+
+  if (['false', '0', 'no', 'n'].includes(lowered)) {
+    return false;
+  }
+
+  return fallback;
+}
+
+function createTransport() {
+  const explicitJson = (process.env.EMAIL_TRANSPORT || '').toLowerCase() === 'json';
+  if (explicitJson) {
+    transportMetadata = { type: 'json', reason: 'EMAIL_TRANSPORT=json' };
+    return nodemailer.createTransport({ jsonTransport: true });
+  }
+
+  if (process.env.SMTP_URL) {
+    transportMetadata = { type: 'smtp-url' };
+    return nodemailer.createTransport(process.env.SMTP_URL);
+  }
+
+  if (process.env.SMTP_HOST) {
+    const port = Number.parseInt(process.env.SMTP_PORT, 10) || 587;
+    const secure = normalizeBool(process.env.SMTP_SECURE, port === 465);
+    transportMetadata = {
+      type: 'smtp',
+      host: process.env.SMTP_HOST,
+      port,
+      secure
+    };
+
+    const auth = process.env.SMTP_USER
+      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      : undefined;
+
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port,
+      secure,
+      auth
+    });
+  }
+
+  transportMetadata = { type: 'json' };
+  return nodemailer.createTransport({ jsonTransport: true });
+}
+
+const transporter = createTransport();
+
+let loggedJsonTransportNotice = false;
+
+function warnIfJsonTransport() {
+  if (loggedJsonTransportNotice) {
+    return;
+  }
+
+  if (transportMetadata.type === 'json' && process.env.NODE_ENV !== 'test') {
+    console.warn(
+      'Email transport is configured for JSON output. Set SMTP_URL or SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS to send real emails.'
+    );
+  }
+
+  loggedJsonTransportNotice = true;
+}
 
 function buildListingEmail({ user, listing, search }) {
   const subject = `New listing in ${listing.area} for your saved search "${search.name}"`;
@@ -37,6 +112,7 @@ function buildListingEmail({ user, listing, search }) {
 
 async function sendListingMatchEmail(user, listing, search) {
   const message = buildListingEmail({ user, listing, search });
+  warnIfJsonTransport();
   const response = await transporter.sendMail(message);
 
   await EmailLog.create({
@@ -79,6 +155,7 @@ async function sendRegistrationEmail(user) {
     return;
   }
 
+  warnIfJsonTransport();
   await transporter.sendMail(message);
 }
 

@@ -89,18 +89,31 @@ function saveAuthState() {
 }
 
 function updateUserStatus() {
-  if (!state.user) {
-    elements.userStatus.innerHTML = '<strong>Guests:</strong> Login to view listings and saved searches.';
+  if (!elements.userStatus) {
+    return;
+  }
+
+  const statusEl = elements.userStatus;
+  const isGuest = !state.user;
+  statusEl.classList.toggle('hero__status--guest', isGuest);
+
+  if (isGuest) {
+    statusEl.innerHTML = `
+      <div class="status-details">
+        <div class="status-name">Private Network</div>
+        <div class="status-role">Sign in or create an account to explore exclusive listings.</div>
+      </div>
+    `;
     return;
   }
 
   const roleLabel = state.user.role === 'agent' ? 'Listing Agent' : 'Buyer / Investor';
-  elements.userStatus.innerHTML = `
-    <div>
+  statusEl.innerHTML = `
+    <div class="status-details">
       <div class="status-name">${state.user.fullName}</div>
       <div class="status-role">${roleLabel}</div>
     </div>
-    <button class="btn" id="logout-btn" type="button">Log out</button>
+    <button class="btn btn--ghost" id="logout-btn" type="button">Log out</button>
   `;
 
   const logoutBtn = document.getElementById('logout-btn');
