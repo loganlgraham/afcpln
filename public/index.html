@@ -15,29 +15,6 @@
         </p>
       </header>
 
-      <section class="persona-toggle" aria-label="Select workspace focus">
-        <p class="persona-toggle__label">Show tools for</p>
-        <div class="persona-toggle__group" role="group" aria-label="Workspace selection">
-          <button
-            type="button"
-            class="persona-toggle__button is-active"
-            data-persona="buyer"
-            aria-pressed="true"
-          >
-            Buyers
-          </button>
-          <button
-            type="button"
-            class="persona-toggle__button"
-            data-persona="agent"
-            aria-pressed="false"
-          >
-            Agents
-          </button>
-        </div>
-        <p class="persona-toggle__helper">Switch between the buyer search tools and the agent listing workspace.</p>
-      </section>
-
       <main class="layout-grid">
         <section
           id="list-section"
@@ -165,6 +142,22 @@
             <div class="form-field">
               <label for="register-password">Password</label>
               <input id="register-password" name="password" type="password" minlength="8" placeholder="Create a secure password" required />
+            </div>
+            <div class="form-field">
+              <fieldset class="choice-fieldset">
+                <legend>Registering as</legend>
+                <div class="choice-group" role="radiogroup" aria-label="Registration persona">
+                  <label class="choice">
+                    <input type="radio" name="persona" value="buyer" checked />
+                    <span>Buyer</span>
+                  </label>
+                  <label class="choice">
+                    <input type="radio" name="persona" value="agent" />
+                    <span>Listing Agent</span>
+                  </label>
+                </div>
+                <p class="field-hint">This keeps the workspace focused on the tools you need.</p>
+              </fieldset>
             </div>
             <div class="form-actions form-field--full">
               <button type="submit" class="button button--primary">Create Account</button>

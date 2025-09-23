@@ -10,10 +10,12 @@ const listingsContainer = document.getElementById('listing-results');
 const emptyState = document.getElementById('listing-empty-state');
 const resultsSummary = document.getElementById('results-summary');
 const refreshButton = document.getElementById('refresh-listings');
-const personaButtons = Array.from(document.querySelectorAll('[data-persona]'));
+const personaInputs = Array.from(document.querySelectorAll('input[name="persona"]'));
 const listSection = document.querySelector('[data-section="list"]');
 const findSection = document.querySelector('[data-section="find"]');
-const initialPersona = document.body?.dataset?.initialPersona === 'agent' ? 'agent' : 'buyer';
+const PERSONA_STORAGE_KEY = 'afcplnPersona';
+const storedPersona = readStoredPersona();
+const initialPersona = storedPersona || (document.body?.dataset?.initialPersona === 'agent' ? 'agent' : 'buyer');
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10 MB
 const DEFAULT_LISTING_SUMMARIES = {
@@ -28,6 +30,38 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 
 let activePersona = initialPersona;
 let cachedListings = [];
+
+function readStoredPersona() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return null;
+  }
+  try {
+    const stored = window.localStorage.getItem(PERSONA_STORAGE_KEY);
+    if (stored === 'agent' || stored === 'buyer') {
+      return stored;
+    }
+  } catch (error) {
+    console.warn('Unable to read stored persona preference:', error);
+  }
+  return null;
+}
+
+function persistPersona(persona) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(PERSONA_STORAGE_KEY, persona);
+  } catch (error) {
+    console.warn('Unable to persist persona preference:', error);
+  }
+}
+
+function syncPersonaInputs(persona) {
+  personaInputs.forEach(input => {
+    input.checked = input.value === persona;
+  });
+}
 
 function setFormMessage(element, message, type = 'info') {
   if (!element) return;
@@ -452,15 +486,15 @@ function handleFindFormReset() {
   }, 0);
 }
 
-function applyPersona(persona) {
+function applyPersona(persona, { persist = false } = {}) {
   const targetPersona = persona === 'agent' ? 'agent' : 'buyer';
   activePersona = targetPersona;
 
-  personaButtons.forEach(button => {
-    const isActive = button.dataset.persona === targetPersona;
-    button.classList.toggle('is-active', isActive);
-    button.setAttribute('aria-pressed', String(isActive));
-  });
+  if (persist) {
+    persistPersona(targetPersona);
+  }
+
+  syncPersonaInputs(targetPersona);
 
   if (document.body) {
     document.body.dataset.activePersona = targetPersona;
@@ -492,10 +526,12 @@ async function handleRegisterSubmit(event) {
   setLoadingState(submitButton, true, 'Creating...');
 
   const formData = new FormData(registerForm);
+  const selectedPersona = formData.get('persona') === 'agent' ? 'agent' : 'buyer';
   const payload = {
     name: normaliseValue(formData.get('name')),
     email: normaliseValue(formData.get('email')),
-    password: String(formData.get('password') || '')
+    password: String(formData.get('password') || ''),
+    persona: selectedPersona
   };
 
   try {
@@ -506,6 +542,7 @@ async function handleRegisterSubmit(event) {
     });
     setFormMessage(registerMessage, data.message || 'Registration successful!', 'success');
     registerForm.reset();
+    applyPersona(selectedPersona, { persist: true });
   } catch (error) {
     console.error('Registration failed:', error);
     setFormMessage(registerMessage, error.message || 'Registration failed.', 'error');
@@ -536,16 +573,24 @@ if (findForm) {
 if (registerForm) {
   registerForm.addEventListener('submit', handleRegisterSubmit);
   registerForm.addEventListener('reset', () => {
-    setTimeout(() => setFormMessage(registerMessage, ''), 0);
+    setTimeout(() => {
+      setFormMessage(registerMessage, '');
+      syncPersonaInputs(activePersona);
+    }, 0);
   });
 }
 
-if (personaButtons.length) {
-  personaButtons.forEach(button => {
-    button.addEventListener('click', () => {
-      const persona = button.dataset.persona === 'agent' ? 'agent' : 'buyer';
-      if (persona !== activePersona) {
-        applyPersona(persona);
+if (personaInputs.length) {
+  personaInputs.forEach(input => {
+    input.addEventListener('change', event => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.checked) {
+        const persona = target.value === 'agent' ? 'agent' : 'buyer';
+        if (persona !== activePersona) {
+          applyPersona(persona, { persist: true });
+        } else {
+          persistPersona(persona);
+        }
       }
     });
   });

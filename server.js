@@ -411,6 +411,7 @@ async function handleRegister(req, res) {
   const name = normaliseText(body.name);
   const email = normaliseText(body.email).toLowerCase();
   const password = body.password ? String(body.password) : '';
+  const persona = body.persona === 'agent' ? 'agent' : 'buyer';
 
   if (!name) {
     sendError(res, 400, 'Name is required.');
@@ -441,6 +442,7 @@ async function handleRegister(req, res) {
     id: crypto.randomUUID(),
     name,
     email,
+    persona,
     passwordHash,
     salt,
     createdAt: new Date().toISOString()
@@ -463,13 +465,15 @@ async function handleRegister(req, res) {
       id: userRecord.id,
       name: userRecord.name,
       email: userRecord.email,
+      persona: userRecord.persona,
       createdAt: userRecord.createdAt
     }
   });
 }
 
-function buildWelcomeEmailHtml(name) {
+function buildWelcomeEmailHtml(name, persona) {
   const safeName = name || 'there';
+  const personaDescriptor = persona === 'agent' ? 'listing agent' : 'buyer';
   return `<!DOCTYPE html>
 <html>
   <head>
@@ -486,7 +490,7 @@ function buildWelcomeEmailHtml(name) {
                 <h1 style="margin-top: 0; color: #1f2937; font-size: 24px;">Welcome to the AFC Private Listing Network</h1>
                 <p style="color: #4b5563; font-size: 16px; line-height: 1.5;">
                   Hi ${safeName},<br /><br />
-                  Thank you for joining the AFC Private Listing Network. Your account is now active and you'll start receiving updates on new off-market opportunities tailored to your preferences.
+                  Thank you for joining the AFC Private Listing Network as a ${personaDescriptor}. Your account is now active and you'll start receiving updates on new off-market opportunities tailored to your preferences.
                 </p>
                 <p style="color: #4b5563; font-size: 16px; line-height: 1.5;">
                   To get started, log in to your dashboard, set up your saved searches, and feel free to list your own properties.
@@ -527,7 +531,7 @@ async function sendConfirmationEmail(user) {
       from: 'AFC Private Listings <noreply@afcpln.local>',
       to: [user.email],
       subject: 'Welcome to the AFC Private Listing Network',
-      html: buildWelcomeEmailHtml(user.name)
+      html: buildWelcomeEmailHtml(user.name, user.persona)
     })
   });
 
@@ -576,7 +580,7 @@ async function router(req, res) {
     return;
   }
 
-  if (req.method === 'POST' && pathname === '/api/register') {
+  if (req.method === 'POST' && (pathname === '/api/register' || pathname === '/api/register/')) {
     await handleRegister(req, res);
     return;
   }
