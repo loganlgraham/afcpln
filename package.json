@@ -1,0 +1,17 @@
+{
+  "name": "afcpln",
+  "version": "0.1.0",
+  "description": "Private Listing Network for AFC/AHA",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "real-estate",
+    "listings",
+    "resend"
+  ],
+  "author": "",
+  "license": "MIT"
+}
