@@ -206,6 +206,21 @@ function renderListings(listings) {
 
   listings.forEach((listing) => {
     const node = elements.listingTemplate.content.firstElementChild.cloneNode(true);
+    const imageWrapper = node.querySelector('.listing__image');
+    const imageEl = imageWrapper ? imageWrapper.querySelector('img') : null;
+    const firstImage = Array.isArray(listing.images) ? listing.images.find((img) => Boolean(img)) : null;
+
+    if (imageWrapper && imageEl) {
+      if (firstImage) {
+        imageEl.src = firstImage;
+        imageEl.alt = `${listing.title} photo`;
+        imageWrapper.hidden = false;
+      } else {
+        imageEl.removeAttribute('src');
+        imageWrapper.hidden = true;
+      }
+    }
+
     node.querySelector('.listing__title').textContent = listing.title;
     node.querySelector('.listing__price').textContent = formatPrice(listing.price);
     const meta = `${listing.bedrooms} bd • ${listing.bathrooms} ba • ${listing.area}`;
@@ -320,10 +335,67 @@ function parseNumber(value) {
   return value ? Number(value) : undefined;
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof File === 'undefined' || !(file instanceof File)) {
+      resolve(null);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Failed to read file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function handleListingSubmit(event) {
   event.preventDefault();
   removeAlert(elements.listingForm);
-  const data = extractFormData(elements.listingForm);
+  const formData = new FormData(elements.listingForm);
+  const supportsFileUpload = typeof File !== 'undefined';
+  const data = {};
+  formData.forEach((value, key) => {
+    if (key !== 'photos') {
+      data[key] = value;
+    }
+  });
+
+  const rawPhotos = supportsFileUpload ? formData.getAll('photos') : [];
+  const photoFiles = supportsFileUpload
+    ? rawPhotos.filter((file) => file instanceof File && file.size > 0)
+    : [];
+
+  const MAX_FILES = 6;
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+  if (photoFiles.length > MAX_FILES) {
+    showAlert(elements.listingForm, `Please select up to ${MAX_FILES} photos.`);
+    return;
+  }
+
+  const oversizedFile = photoFiles.find((file) => file.size > MAX_FILE_SIZE);
+  if (oversizedFile) {
+    showAlert(elements.listingForm, 'Each photo must be 5MB or smaller.');
+    return;
+  }
+
+  let encodedImages = [];
+
+  if (photoFiles.length) {
+    try {
+      const conversions = await Promise.all(photoFiles.map((file) => fileToDataUrl(file)));
+      encodedImages = conversions.filter(Boolean);
+    } catch (fileError) {
+      console.error('Failed to process listing photos', fileError);
+      showAlert(
+        elements.listingForm,
+        'We could not process one of the selected photos. Please try again with different images.'
+      );
+      return;
+    }
+  }
+
   const payload = {
     title: data.title,
     description: data.description,
@@ -341,11 +413,20 @@ async function handleListingSubmit(event) {
     }
   };
 
+  if (encodedImages.length) {
+    payload.images = encodedImages;
+  }
+
   try {
     await apiRequest('/listings', { method: 'POST', body: payload });
     elements.listingForm.reset();
     showAlert(elements.listingForm, 'Listing published! Buyers with matching searches will be notified.', 'success');
-    fetchListings(Object.fromEntries(new FormData(elements.filtersForm)));
+    if (elements.filtersForm) {
+      const filters = Object.fromEntries(new FormData(elements.filtersForm).entries());
+      fetchListings(filters);
+    } else {
+      fetchListings();
+    }
   } catch (error) {
     showAlert(elements.listingForm, error.message);
   }

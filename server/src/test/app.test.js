@@ -1,8 +1,20 @@
+jest.mock('nodemailer', () => {
+  const sendMailMock = jest.fn().mockResolvedValue({ message: 'mock-transport' });
+  const createTransportMock = jest.fn(() => ({ sendMail: sendMailMock }));
+  return {
+    createTransport: createTransportMock,
+    __mock: { sendMailMock, createTransportMock }
+  };
+});
+
 const request = require('supertest');
+const nodemailer = require('nodemailer');
 const app = require('../app');
 const User = require('../models/User');
 const Listing = require('../models/Listing');
 const EmailLog = require('../models/EmailLog');
+
+const { sendMailMock } = nodemailer.__mock;
 
 async function registerUser(overrides = {}) {
   const payload = {
@@ -22,6 +34,10 @@ async function loginUser(email, password) {
 }
 
 describe('AFCPLN API', () => {
+  beforeEach(() => {
+    sendMailMock.mockClear();
+  });
+
   it('registers agents and users, stores listings, and creates targeted emails', async () => {
     const agentEmail = 'agent@example.com';
     const userEmail = 'buyer@example.com';
@@ -136,5 +152,16 @@ describe('AFCPLN API', () => {
 
     expect(updateRes.status).toBe(403);
     expect(updateRes.body.message).toMatch(/permission/);
+  });
+
+  it('sends a confirmation email after successful registration', async () => {
+    const email = 'welcome@example.com';
+    const response = await registerUser({ email });
+
+    expect(response.status).toBe(201);
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    const message = sendMailMock.mock.calls[0][0];
+    expect(message.to).toBe(email);
+    expect(message.subject).toMatch(/welcome/i);
   });
 });
