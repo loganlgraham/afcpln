@@ -252,8 +252,17 @@ button {
 .search-layout {
   display: grid;
   gap: 2rem;
-  grid-template-columns: minmax(250px, 320px) 1fr;
   align-items: start;
+}
+
+.search-layout > * {
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .search-layout {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  }
 }
 
 .search-panel {
@@ -265,6 +274,7 @@ button {
   display: grid;
   gap: 1.5rem;
   box-shadow: none;
+  min-width: 0;
 }
 
 .search-panel::before {
@@ -291,9 +301,10 @@ button {
   background: rgba(248, 250, 252, 0.9);
   border: 1px solid rgba(15, 23, 42, 0.06);
   border-radius: 18px;
-  padding: 1.5rem;
+  padding: 1.75rem;
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
-  overflow: hidden;
+  overflow: visible;
+  min-width: 0;
 }
 
 .listing-results::before {
@@ -302,6 +313,7 @@ button {
   inset: 0;
   background: linear-gradient(160deg, rgba(15, 111, 222, 0.1), transparent 55%);
   pointer-events: none;
+  border-radius: inherit;
 }
 
 .listing-results > * {
@@ -346,32 +358,43 @@ button {
 
 .listing-grid {
   display: grid;
-  gap: 1.25rem;
+  gap: 1.5rem;
   margin: 0;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  min-width: 0;
 }
 
 .listing {
   background: linear-gradient(180deg, rgba(16, 42, 67, 0.05), #ffffff);
   border-radius: 14px;
-  padding: 1.25rem;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  display: grid;
-  gap: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  height: 100%;
 }
 
 .listing__image {
-  margin: -1.25rem -1.25rem 1rem;
-  border-radius: 12px 12px 0 0;
+  margin: 0;
+  height: 200px;
   overflow: hidden;
   background: #cbd2d9;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
 }
 
 .listing__image img {
   display: block;
   width: 100%;
-  height: 200px;
+  height: 100%;
   object-fit: cover;
+}
+
+.listing__content {
+  padding: 1.25rem 1.5rem 1.5rem;
+  display: grid;
+  gap: 0.75rem;
+  flex: 1;
 }
 
 .listing__header {
@@ -390,6 +413,7 @@ button {
 .listing__price {
   font-weight: 700;
   color: #0b7285;
+  white-space: nowrap;
 }
 
 .listing__meta {
@@ -401,12 +425,15 @@ button {
 .listing__description {
   margin: 0;
   color: #486581;
+  line-height: 1.5;
 }
 
 .listing__agent {
   margin: 0;
   font-style: italic;
   color: #243b53;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .saved-search-list {
@@ -497,11 +524,12 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .listing__image {
-    margin: -1.25rem -1.25rem 0.75rem;
-  }
-
   .listing-results {
     padding: 1.25rem;
+  }
+
+  .listing__content {
+    padding: 1.25rem;
+    gap: 0.65rem;
   }
 }
