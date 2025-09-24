@@ -2,7 +2,11 @@ const nodemailer = require('nodemailer');
 const { Resend } = require('resend');
 const EmailLog = require('../models/EmailLog');
 
-const fromAddress = process.env.EMAIL_FROM || 'no-reply@afcpln.local';
+const hasResendConfigured = Boolean(process.env.RESEND_API_KEY);
+const defaultFromAddress = hasResendConfigured
+  ? 'AFC Private Listings <onboarding@resend.dev>'
+  : 'no-reply@afcpln.local';
+const fromAddress = process.env.EMAIL_FROM || defaultFromAddress;
 
 let transportMetadata = { type: 'json' };
 let transporter;

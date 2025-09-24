@@ -75,6 +75,8 @@ describe('AFCPLN API', () => {
     expect(savedSearchRes.status).toBe(201);
     expect(savedSearchRes.body.name).toBe('North Loop Buyers');
 
+    const sampleImage = `data:image/jpeg;base64,${'A'.repeat(300000)}`;
+
     const listingPayload = {
       title: 'Modern Downtown Condo',
       description: 'Bright condo with skyline views and private balcony.',
@@ -84,6 +86,7 @@ describe('AFCPLN API', () => {
       squareFeet: 1200,
       area: 'North Loop',
       features: ['Balcony', 'Gym Access'],
+      images: [sampleImage],
       address: {
         street: '123 River St',
         city: 'Minneapolis',
@@ -99,6 +102,7 @@ describe('AFCPLN API', () => {
 
     expect(createListingRes.status).toBe(201);
     expect(createListingRes.body.area).toBe('North Loop');
+    expect(createListingRes.body.images).toHaveLength(1);
 
     const listingsRes = await request(app).get('/api/listings').query({ area: 'North Loop' });
     expect(listingsRes.status).toBe(200);

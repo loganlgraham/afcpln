@@ -25,6 +25,7 @@ describe('emailService transport selection', () => {
     expect(resend.__mock.sendMock).toHaveBeenCalledTimes(1);
     expect(resend.__mock.sendMock.mock.calls[0][0]).toMatchObject({
       to: 'resend-user@example.com',
+      from: 'AFC Private Listings <onboarding@resend.dev>',
       subject: expect.stringMatching(/welcome/i)
     });
   });

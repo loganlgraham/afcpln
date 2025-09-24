@@ -65,21 +65,15 @@
         </div>
       </section>
 
-      <section class="card card--search" id="listing-search" hidden>
-        <div class="card__header">
-          <div>
-            <h2>Find Private Listings</h2>
-            <p class="card__subtitle">Refine the map to surface the latest off-market opportunities.</p>
-          </div>
-        </div>
-        <div class="search-results-panel">
-          <div class="search-results-panel__header">
-            <h3>Matching Listings</h3>
-            <p>Newest opportunities that meet your filters will surface here first.</p>
-          </div>
+      <section class="card" id="listing-search" hidden>
+        <h2>Find Private Listings</h2>
+        <p class="card__subtitle">Refine the map to surface the latest off-market opportunities.</p>
+        <div class="form-section form-section--results">
+          <h3>Matching Listings</h3>
+          <p class="form-section__description">Newest opportunities that meet your filters will surface here first.</p>
           <div id="listings" class="listing-grid" aria-live="polite"></div>
         </div>
-        <form id="filters" class="form search-panel">
+        <form id="filters" class="form">
           <div class="form-section">
             <h3>Location Focus</h3>
             <div class="form-grid">
