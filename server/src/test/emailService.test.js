@@ -13,8 +13,13 @@ jest.mock('resend', () => {
   return { Resend, __mock: { sendMock } };
 });
 
+jest.mock('../models/User', () => ({
+  findById: jest.fn()
+}));
+
 const nodemailer = require('nodemailer');
 const resend = require('resend');
+const User = require('../models/User');
 
 describe('emailService transport selection', () => {
   beforeEach(() => {
@@ -22,6 +27,7 @@ describe('emailService transport selection', () => {
     resend.__mock.sendMock.mockResolvedValue({ data: { id: 'resend-test-id' } });
     nodemailer.__mock.sendMailMock.mockReset();
     nodemailer.__mock.createTransportMock.mockReset();
+    User.findById.mockReset();
 
     delete process.env.RESEND_API_KEY;
     delete process.env.EMAIL_FROM;
@@ -72,6 +78,42 @@ describe('emailService transport selection', () => {
         to: 'fallback@example.com',
         from: expect.stringContaining('AFC Private Listings'),
         subject: expect.stringMatching(/welcome/i)
+      })
+    );
+  });
+
+  it('hydrates missing participant emails before delivering conversation notifications', async () => {
+    process.env.RESEND_API_KEY = 'test-resend-key';
+    const agentId = '507f1f77bcf86cd799439011';
+    const buyerId = '507f191e810c19729de860ea';
+
+    User.findById.mockResolvedValueOnce({
+      _id: agentId,
+      fullName: 'Agent Example',
+      email: 'agent@example.com',
+      role: 'agent'
+    });
+
+    let sendConversationNotification;
+    jest.isolateModules(() => {
+      ({ sendConversationNotification } = require('../services/emailService'));
+    });
+
+    await sendConversationNotification(
+      {
+        agent: agentId,
+        buyer: { _id: buyerId, email: 'buyer@example.com', fullName: 'Buyer Example', role: 'user' },
+        listing: { title: '123 Test St', area: 'Test Area', address: { city: 'Test City', state: 'TS' } }
+      },
+      { senderId: buyerId, messageBody: 'Is this still available?' }
+    );
+
+    expect(User.findById).toHaveBeenCalledWith(agentId);
+    expect(resend.__mock.sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'agent@example.com',
+        subject: expect.stringMatching(/new message/i),
+        text: expect.stringContaining('Is this still available?')
       })
     );
   });

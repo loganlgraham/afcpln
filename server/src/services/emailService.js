@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 const { Resend } = require('resend');
 const EmailLog = require('../models/EmailLog');
+const User = require('../models/User');
 
 const brandName =
   typeof process.env.EMAIL_FROM_NAME === 'string' && process.env.EMAIL_FROM_NAME.trim()
@@ -406,6 +407,35 @@ function normalizeParticipant(participant) {
   };
 }
 
+async function hydrateParticipant(participant) {
+  const normalized = normalizeParticipant(participant);
+
+  if (!normalized._id) {
+    return normalized;
+  }
+
+  if (normalized.email) {
+    return normalized;
+  }
+
+  try {
+    const user = await User.findById(normalized._id).select('fullName email role');
+
+    if (user) {
+      return {
+        _id: user._id?.toString?.() || normalized._id,
+        fullName: user.fullName || normalized.fullName,
+        email: user.email || normalized.email,
+        role: user.role || normalized.role
+      };
+    }
+  } catch (error) {
+    console.error('Failed to hydrate conversation participant for email notification', error);
+  }
+
+  return normalized;
+}
+
 function formatListingLocation(listing) {
   if (!listing) {
     return '';
@@ -474,8 +504,8 @@ async function sendConversationNotification(conversation, { senderId, messageBod
     return;
   }
 
-  const agent = normalizeParticipant(conversation.agent);
-  const buyer = normalizeParticipant(conversation.buyer);
+  const agent = await hydrateParticipant(conversation.agent);
+  const buyer = await hydrateParticipant(conversation.buyer);
   const normalizedSenderId = resolveId(senderId);
 
   let recipient = agent;
