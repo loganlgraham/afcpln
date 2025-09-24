@@ -147,6 +147,11 @@ body.listings-page .container {
   max-width: 560px;
 }
 
+.card__heading .card__helper {
+  margin: 0;
+  max-width: none;
+}
+
 .card__link {
   color: #0b7285;
   font-weight: 600;
