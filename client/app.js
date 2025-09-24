@@ -14,17 +14,49 @@ const elements = {
   authSection: document.getElementById('auth-section'),
   userStatus: document.getElementById('user-status'),
   listingTemplate: document.getElementById('listing-template'),
+  agentListingTemplate: document.getElementById('agent-listing-template'),
   tabs: document.querySelectorAll('.tab'),
   tabContents: document.querySelectorAll('.tab-content'),
-  optionalFields: document.querySelectorAll('[data-role="agent"]')
+  optionalFields: document.querySelectorAll('[data-role="agent"]'),
+  listingPhotoInput: document.querySelector('#listing-form input[name="photos"]'),
+  listingPhotoPreviews: document.getElementById('listing-photo-previews'),
+  agentListingsContainer: document.getElementById('agent-listings'),
+  listingSubmitButton: document.getElementById('listing-submit'),
+  listingCancelButton: document.getElementById('listing-cancel')
 };
 
 const state = {
   token: null,
   user: null,
   listings: [],
-  savedSearches: []
+  savedSearches: [],
+  myListings: [],
+  activeFilters: {},
+  editingListingId: null
 };
+
+const LISTING_PHOTO_LIMITS = {
+  maxFiles: 6,
+  maxFileSize: 5 * 1024 * 1024,
+  maxFileSizeLabel: '5MB'
+};
+
+const LISTING_STATUS_LABELS = {
+  active: 'Active',
+  pending: 'Under Contract',
+  sold: 'Sold',
+  draft: 'Draft'
+};
+
+let listingPhotoPreviewUrls = [];
+
+function getUserId() {
+  if (!state.user) {
+    return null;
+  }
+
+  return state.user._id || state.user.id || null;
+}
 
 function setActiveTab(tabId = 'login') {
   const tabs = Array.from(elements.tabs || []);
@@ -74,6 +106,12 @@ function handleLogout() {
   state.user = null;
   state.savedSearches = [];
   state.listings = [];
+  state.myListings = [];
+  state.activeFilters = {};
+  state.editingListingId = null;
+  if (elements.listingForm) {
+    resetListingForm();
+  }
   saveAuthState();
   clearAuthForms();
   setActiveTab('login');
@@ -138,9 +176,15 @@ function updateUI() {
     if (state.user.role === 'user') {
       fetchSavedSearches();
     }
+    if (state.user.role === 'agent') {
+      fetchMyListings();
+    }
   } else {
     elements.listingsContainer.innerHTML = '';
     elements.savedSearchList.innerHTML = '';
+    if (elements.agentListingsContainer) {
+      elements.agentListingsContainer.innerHTML = '';
+    }
   }
 }
 
@@ -193,6 +237,199 @@ function removeAlert(form) {
   }
 }
 
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '';
+  }
+
+  const megabyte = 1024 * 1024;
+  if (bytes >= megabyte) {
+    return `${(bytes / megabyte).toFixed(1)} MB`;
+  }
+
+  const kilobyte = 1024;
+  return `${Math.max(1, Math.round(bytes / kilobyte))} KB`;
+}
+
+function validateListingPhotos(photoFiles) {
+  if (!photoFiles.length) {
+    return null;
+  }
+
+  if (photoFiles.length > LISTING_PHOTO_LIMITS.maxFiles) {
+    return `Please select up to ${LISTING_PHOTO_LIMITS.maxFiles} photos.`;
+  }
+
+  const oversizedFile = photoFiles.find((file) => file.size > LISTING_PHOTO_LIMITS.maxFileSize);
+  if (oversizedFile) {
+    return `Each photo must be ${LISTING_PHOTO_LIMITS.maxFileSizeLabel} or smaller.`;
+  }
+
+  return null;
+}
+
+function clearListingPhotoPreviews() {
+  if (!elements.listingPhotoPreviews) {
+    return;
+  }
+
+  if (listingPhotoPreviewUrls.length && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+    listingPhotoPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+  }
+  listingPhotoPreviewUrls = [];
+  elements.listingPhotoPreviews.innerHTML = '';
+  elements.listingPhotoPreviews.hidden = true;
+}
+
+function updateListingPhotoPreviews(files) {
+  if (!elements.listingPhotoPreviews) {
+    return;
+  }
+
+  clearListingPhotoPreviews();
+
+  if (!files.length) {
+    return;
+  }
+
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  files.forEach((file) => {
+    if (!(file instanceof File) || file.size <= 0) {
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    listingPhotoPreviewUrls.push(objectUrl);
+
+    const figure = document.createElement('figure');
+    figure.className = 'photo-preview';
+
+    const img = document.createElement('img');
+    img.src = objectUrl;
+    img.alt = file.name ? `${file.name} preview` : 'Listing photo preview';
+
+    const caption = document.createElement('figcaption');
+    const sizeLabel = formatFileSize(file.size);
+    caption.textContent = sizeLabel ? `${file.name} • ${sizeLabel}` : file.name;
+
+    figure.append(img, caption);
+    fragment.append(figure);
+  });
+
+  if (!fragment.childNodes.length) {
+    return;
+  }
+
+  elements.listingPhotoPreviews.append(fragment);
+  elements.listingPhotoPreviews.hidden = false;
+}
+
+function handleListingPhotoChange(event) {
+  if (!elements.listingForm || typeof File === 'undefined') {
+    return;
+  }
+
+  const files = Array.from(event.target.files || []).filter((file) => file instanceof File && file.size > 0);
+
+  if (!files.length) {
+    clearListingPhotoPreviews();
+    return;
+  }
+
+  const validationError = validateListingPhotos(files);
+  if (validationError) {
+    showAlert(elements.listingForm, validationError);
+    event.target.value = '';
+    clearListingPhotoPreviews();
+    return;
+  }
+
+  removeAlert(elements.listingForm);
+  updateListingPhotoPreviews(files);
+}
+
+function populateListingForm(listing) {
+  if (!elements.listingForm || !listing) {
+    return;
+  }
+
+  const address = listing.address || {};
+  const fields = {
+    title: listing.title || '',
+    area: listing.area || '',
+    price: listing.price ?? '',
+    bedrooms: listing.bedrooms ?? '',
+    bathrooms: listing.bathrooms ?? '',
+    squareFeet: listing.squareFeet ?? '',
+    description: listing.description || '',
+    features: Array.isArray(listing.features) ? listing.features.join(', ') : '',
+    street: address.street || '',
+    city: address.city || '',
+    state: address.state || '',
+    postalCode: address.postalCode || ''
+  };
+
+  Object.entries(fields).forEach(([name, value]) => {
+    const input = elements.listingForm.querySelector(`[name="${name}"]`);
+    if (input) {
+      input.value = value === undefined || value === null ? '' : value;
+    }
+  });
+}
+
+function setListingFormMode(mode, listing = null) {
+  const isEdit = mode === 'edit' && listing;
+  state.editingListingId = isEdit ? listing._id : null;
+
+  if (elements.listingSubmitButton) {
+    elements.listingSubmitButton.textContent = isEdit ? 'Save Changes' : 'Publish Listing';
+  }
+
+  if (elements.listingCancelButton) {
+    elements.listingCancelButton.hidden = !isEdit;
+  }
+
+  if (elements.listingForm) {
+    elements.listingForm.dataset.mode = isEdit ? 'edit' : 'create';
+  }
+
+  if (isEdit) {
+    populateListingForm(listing);
+    clearListingPhotoPreviews();
+    if (elements.listingPhotoInput) {
+      elements.listingPhotoInput.value = '';
+    }
+    removeAlert(elements.listingForm);
+    if (elements.agentToolsSection && typeof elements.agentToolsSection.scrollIntoView === 'function') {
+      elements.agentToolsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+}
+
+function clearListingFormState() {
+  clearListingPhotoPreviews();
+  if (elements.listingPhotoInput) {
+    elements.listingPhotoInput.value = '';
+  }
+  if (elements.listingForm) {
+    removeAlert(elements.listingForm);
+  }
+  setListingFormMode('create');
+}
+
+function resetListingForm() {
+  if (elements.listingForm) {
+    elements.listingForm.reset();
+  } else {
+    clearListingFormState();
+  }
+}
+
 function formatPrice(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 }
@@ -206,6 +443,21 @@ function renderListings(listings) {
 
   listings.forEach((listing) => {
     const node = elements.listingTemplate.content.firstElementChild.cloneNode(true);
+    const imageWrapper = node.querySelector('.listing__image');
+    const imageEl = imageWrapper ? imageWrapper.querySelector('img') : null;
+    const firstImage = Array.isArray(listing.images) ? listing.images.find((img) => Boolean(img)) : null;
+
+    if (imageWrapper && imageEl) {
+      if (firstImage) {
+        imageEl.src = firstImage;
+        imageEl.alt = `${listing.title} photo`;
+        imageWrapper.hidden = false;
+      } else {
+        imageEl.removeAttribute('src');
+        imageWrapper.hidden = true;
+      }
+    }
+
     node.querySelector('.listing__title').textContent = listing.title;
     node.querySelector('.listing__price').textContent = formatPrice(listing.price);
     const meta = `${listing.bedrooms} bd • ${listing.bathrooms} ba • ${listing.area}`;
@@ -217,6 +469,88 @@ function renderListings(listings) {
     node.querySelector('.listing__agent').textContent = agentInfo;
     elements.listingsContainer.append(node);
   });
+}
+
+function renderAgentListings(listings) {
+  if (!elements.agentListingsContainer || !elements.agentListingTemplate) {
+    return;
+  }
+
+  const container = elements.agentListingsContainer;
+  container.innerHTML = '';
+
+  if (!listings.length) {
+    container.innerHTML =
+      '<div class="empty-state">Publish your first property to manage it here.</div>';
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  listings.forEach((listing) => {
+    const node = elements.agentListingTemplate.content.firstElementChild.cloneNode(true);
+    const imageWrapper = node.querySelector('.listing__image');
+    const imageEl = imageWrapper ? imageWrapper.querySelector('img') : null;
+    const firstImage = Array.isArray(listing.images) ? listing.images.find((img) => Boolean(img)) : null;
+
+    if (imageWrapper && imageEl) {
+      if (firstImage) {
+        imageEl.src = firstImage;
+        imageEl.alt = `${listing.title} photo`;
+        imageWrapper.hidden = false;
+      } else {
+        imageEl.removeAttribute('src');
+        imageWrapper.hidden = true;
+      }
+    }
+
+    node.querySelector('.listing__title').textContent = listing.title;
+    node.querySelector('.listing__price').textContent = formatPrice(listing.price);
+    const metaParts = [
+      typeof listing.bedrooms === 'number' ? `${listing.bedrooms} bd` : null,
+      typeof listing.bathrooms === 'number' ? `${listing.bathrooms} ba` : null,
+      listing.area || null
+    ].filter(Boolean);
+
+    const cityState = listing.address
+      ? [listing.address.city, listing.address.state].filter(Boolean).join(', ')
+      : '';
+
+    if (cityState) {
+      metaParts.push(cityState);
+    }
+
+    node.querySelector('.listing__meta').textContent = metaParts.join(' • ');
+    node.querySelector('.listing__description').textContent = listing.description || '';
+
+    const currentStatus = listing.status || 'active';
+    const statusBadge = node.querySelector('[data-status]');
+    if (statusBadge) {
+      statusBadge.textContent = LISTING_STATUS_LABELS[currentStatus] || LISTING_STATUS_LABELS.active;
+      statusBadge.dataset.status = currentStatus;
+    }
+
+    const editButton = node.querySelector('[data-action="edit"]');
+    const deleteButton = node.querySelector('[data-action="delete"]');
+    const statusButtons = node.querySelectorAll('[data-status-action]');
+
+    if (editButton) {
+      editButton.dataset.id = listing._id;
+    }
+
+    if (deleteButton) {
+      deleteButton.dataset.id = listing._id;
+    }
+
+    statusButtons.forEach((button) => {
+      button.dataset.id = listing._id;
+      button.disabled = button.dataset.statusAction === currentStatus;
+    });
+
+    fragment.append(node);
+  });
+
+  container.append(fragment);
 }
 
 function renderSavedSearches(searches) {
@@ -240,17 +574,42 @@ function renderSavedSearches(searches) {
   });
 }
 
-async function fetchListings(filters = {}) {
+async function fetchListings(filters) {
   if (!state.user) {
     return;
   }
+  const appliedFilters = filters ? { ...filters } : { ...state.activeFilters };
   try {
-    const data = await apiRequest('/listings', { params: filters });
+    const data = await apiRequest('/listings', { params: appliedFilters });
     state.listings = data;
+    state.activeFilters = appliedFilters;
     renderListings(data);
   } catch (error) {
     console.error(error);
     elements.listingsContainer.innerHTML = `<div class="empty-state">${error.message}</div>`;
+  }
+}
+
+async function fetchMyListings() {
+  if (!state.user || state.user.role !== 'agent') {
+    return;
+  }
+
+  const userId = getUserId();
+  if (!userId) {
+    return;
+  }
+
+  try {
+    const listings = await apiRequest('/listings', { params: { agentId: userId } });
+    state.myListings = listings;
+    renderAgentListings(listings);
+  } catch (error) {
+    console.error(error);
+    state.myListings = [];
+    if (elements.agentListingsContainer) {
+      elements.agentListingsContainer.innerHTML = `<div class="empty-state">${error.message}</div>`;
+    }
   }
 }
 
@@ -320,10 +679,59 @@ function parseNumber(value) {
   return value ? Number(value) : undefined;
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof File === 'undefined' || !(file instanceof File)) {
+      resolve(null);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Failed to read file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function handleListingSubmit(event) {
   event.preventDefault();
   removeAlert(elements.listingForm);
-  const data = extractFormData(elements.listingForm);
+  const formData = new FormData(elements.listingForm);
+  const supportsFileUpload = typeof File !== 'undefined';
+  const data = {};
+  formData.forEach((value, key) => {
+    if (key !== 'photos') {
+      data[key] = value;
+    }
+  });
+
+  const rawPhotos = supportsFileUpload ? formData.getAll('photos') : [];
+  const photoFiles = supportsFileUpload
+    ? rawPhotos.filter((file) => file instanceof File && file.size > 0)
+    : [];
+
+  const validationError = validateListingPhotos(photoFiles);
+  if (validationError) {
+    showAlert(elements.listingForm, validationError);
+    return;
+  }
+
+  let encodedImages = [];
+
+  if (photoFiles.length) {
+    try {
+      const conversions = await Promise.all(photoFiles.map((file) => fileToDataUrl(file)));
+      encodedImages = conversions.filter(Boolean);
+    } catch (fileError) {
+      console.error('Failed to process listing photos', fileError);
+      showAlert(
+        elements.listingForm,
+        'We could not process one of the selected photos. Please try again with different images.'
+      );
+      return;
+    }
+  }
+
   const payload = {
     title: data.title,
     description: data.description,
@@ -341,11 +749,25 @@ async function handleListingSubmit(event) {
     }
   };
 
+  if (encodedImages.length) {
+    payload.images = encodedImages;
+  }
+
+  const isEdit = Boolean(state.editingListingId);
+  const endpoint = isEdit ? `/listings/${state.editingListingId}` : '/listings';
+  const method = isEdit ? 'PUT' : 'POST';
+
   try {
-    await apiRequest('/listings', { method: 'POST', body: payload });
-    elements.listingForm.reset();
-    showAlert(elements.listingForm, 'Listing published! Buyers with matching searches will be notified.', 'success');
-    fetchListings(Object.fromEntries(new FormData(elements.filtersForm)));
+    await apiRequest(endpoint, { method, body: payload });
+    resetListingForm();
+    const successMessage = isEdit
+      ? 'Listing details updated successfully.'
+      : 'Listing published! Buyers with matching searches will be notified.';
+    showAlert(elements.listingForm, successMessage, 'success');
+    fetchListings();
+    if (state.user?.role === 'agent') {
+      fetchMyListings();
+    }
   } catch (error) {
     showAlert(elements.listingForm, error.message);
   }
@@ -387,6 +809,77 @@ function handleSavedSearchClick(event) {
     .catch((error) => {
       showAlert(elements.savedSearchForm, error.message);
     });
+}
+
+function handleAgentListingsClick(event) {
+  const statusButton = event.target.closest('[data-status-action]');
+  if (statusButton) {
+    const listingId = statusButton.dataset.id;
+    const status = statusButton.dataset.statusAction;
+    if (!listingId || !status) {
+      return;
+    }
+
+    const current = state.myListings.find((listing) => listing._id === listingId);
+    if (current && current.status === status) {
+      return;
+    }
+
+    updateListingStatus(listingId, status);
+    return;
+  }
+
+  const actionButton = event.target.closest('[data-action]');
+  if (!actionButton) {
+    return;
+  }
+
+  const listingId = actionButton.dataset.id;
+  if (!listingId) {
+    return;
+  }
+
+  if (actionButton.dataset.action === 'edit') {
+    const listing = state.myListings.find((item) => item._id === listingId);
+    if (listing) {
+      setListingFormMode('edit', listing);
+    }
+  } else if (actionButton.dataset.action === 'delete') {
+    deleteListing(listingId);
+  }
+}
+
+async function updateListingStatus(listingId, status) {
+  try {
+    await apiRequest(`/listings/${listingId}`, { method: 'PUT', body: { status } });
+    const label = LISTING_STATUS_LABELS[status] || status;
+    showAlert(elements.listingForm, `Listing marked as ${label}.`, 'success');
+    fetchMyListings();
+    fetchListings();
+  } catch (error) {
+    showAlert(elements.listingForm, error.message);
+  }
+}
+
+async function deleteListing(listingId) {
+  const listing = state.myListings.find((item) => item._id === listingId);
+  const listingName = listing?.title ? `"${listing.title}"` : 'this listing';
+
+  if (typeof window !== 'undefined' && !window.confirm(`Remove ${listingName} from the network?`)) {
+    return;
+  }
+
+  try {
+    await apiRequest(`/listings/${listingId}`, { method: 'DELETE' });
+    if (state.editingListingId === listingId) {
+      resetListingForm();
+    }
+    showAlert(elements.listingForm, 'Listing removed from the network.', 'success');
+    fetchMyListings();
+    fetchListings();
+  } catch (error) {
+    showAlert(elements.listingForm, error.message);
+  }
 }
 
 function handleFilterSubmit(event) {
@@ -453,6 +946,18 @@ function bootstrap() {
 
   if (elements.listingForm) {
     elements.listingForm.addEventListener('submit', handleListingSubmit);
+    elements.listingForm.addEventListener('reset', clearListingFormState);
+    setListingFormMode('create');
+  }
+
+  if (elements.listingCancelButton) {
+    elements.listingCancelButton.addEventListener('click', () => {
+      resetListingForm();
+    });
+  }
+
+  if (elements.listingPhotoInput) {
+    elements.listingPhotoInput.addEventListener('change', handleListingPhotoChange);
   }
 
   if (elements.savedSearchForm) {
@@ -465,6 +970,10 @@ function bootstrap() {
 
   if (elements.filtersForm) {
     elements.filtersForm.addEventListener('submit', handleFilterSubmit);
+  }
+
+  if (elements.agentListingsContainer) {
+    elements.agentListingsContainer.addEventListener('click', handleAgentListingsClick);
   }
 }
 

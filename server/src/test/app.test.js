@@ -1,8 +1,20 @@
+jest.mock('nodemailer', () => {
+  const sendMailMock = jest.fn().mockResolvedValue({ message: 'mock-transport' });
+  const createTransportMock = jest.fn(() => ({ sendMail: sendMailMock }));
+  return {
+    createTransport: createTransportMock,
+    __mock: { sendMailMock, createTransportMock }
+  };
+});
+
 const request = require('supertest');
+const nodemailer = require('nodemailer');
 const app = require('../app');
 const User = require('../models/User');
 const Listing = require('../models/Listing');
 const EmailLog = require('../models/EmailLog');
+
+const { sendMailMock } = nodemailer.__mock;
 
 async function registerUser(overrides = {}) {
   const payload = {
@@ -22,6 +34,10 @@ async function loginUser(email, password) {
 }
 
 describe('AFCPLN API', () => {
+  beforeEach(() => {
+    sendMailMock.mockClear();
+  });
+
   it('registers agents and users, stores listings, and creates targeted emails', async () => {
     const agentEmail = 'agent@example.com';
     const userEmail = 'buyer@example.com';
@@ -59,6 +75,8 @@ describe('AFCPLN API', () => {
     expect(savedSearchRes.status).toBe(201);
     expect(savedSearchRes.body.name).toBe('North Loop Buyers');
 
+    const sampleImage = `data:image/jpeg;base64,${'A'.repeat(300000)}`;
+
     const listingPayload = {
       title: 'Modern Downtown Condo',
       description: 'Bright condo with skyline views and private balcony.',
@@ -68,6 +86,7 @@ describe('AFCPLN API', () => {
       squareFeet: 1200,
       area: 'North Loop',
       features: ['Balcony', 'Gym Access'],
+      images: [sampleImage],
       address: {
         street: '123 River St',
         city: 'Minneapolis',
@@ -83,6 +102,7 @@ describe('AFCPLN API', () => {
 
     expect(createListingRes.status).toBe(201);
     expect(createListingRes.body.area).toBe('North Loop');
+    expect(createListingRes.body.images).toHaveLength(1);
 
     const listingsRes = await request(app).get('/api/listings').query({ area: 'North Loop' });
     expect(listingsRes.status).toBe(200);
@@ -136,5 +156,16 @@ describe('AFCPLN API', () => {
 
     expect(updateRes.status).toBe(403);
     expect(updateRes.body.message).toMatch(/permission/);
+  });
+
+  it('sends a confirmation email after successful registration', async () => {
+    const email = 'welcome@example.com';
+    const response = await registerUser({ email });
+
+    expect(response.status).toBe(201);
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    const message = sendMailMock.mock.calls[0][0];
+    expect(message.to).toBe(email);
+    expect(message.subject).toMatch(/welcome/i);
   });
 });

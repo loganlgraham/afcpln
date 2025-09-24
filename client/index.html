@@ -65,16 +65,18 @@
         </div>
       </section>
 
-      <section class="card card--search" id="listing-search" hidden>
-        <div class="card__header">
-          <div>
-            <h2>Find Private Listings</h2>
-            <p class="card__subtitle">Refine the map to surface the latest off-market opportunities.</p>
-          </div>
+      <section class="card" id="listing-search" hidden>
+        <h2>Find Private Listings</h2>
+        <p class="card__subtitle">Refine the map to surface the latest off-market opportunities.</p>
+        <div class="form-section form-section--results">
+          <h3>Matching Listings</h3>
+          <p class="form-section__description">Newest opportunities that meet your filters will surface here first.</p>
+          <div id="listings" class="listing-grid" aria-live="polite"></div>
         </div>
-        <div class="search-layout">
-          <form id="filters" class="filters search-panel">
-            <div class="filter-group">
+        <form id="filters" class="form form--search">
+          <div class="form-section">
+            <h3>Location Focus</h3>
+            <div class="form-grid">
               <label>Area
                 <input type="text" name="area" placeholder="North Loop" />
               </label>
@@ -85,13 +87,21 @@
                 <input type="text" name="state" placeholder="MN" maxlength="2" />
               </label>
             </div>
-            <div class="filter-group">
+          </div>
+          <div class="form-section">
+            <h3>Budget</h3>
+            <div class="form-grid">
               <label>Min Price
                 <input type="number" name="minPrice" min="0" step="1000" />
               </label>
               <label>Max Price
                 <input type="number" name="maxPrice" min="0" step="1000" />
               </label>
+            </div>
+          </div>
+          <div class="form-section">
+            <h3>Property Details</h3>
+            <div class="form-grid">
               <label>Bedrooms
                 <input type="number" name="minBedrooms" min="0" />
               </label>
@@ -99,12 +109,11 @@
                 <input type="number" name="minBathrooms" min="0" step="0.5" />
               </label>
             </div>
-            <button type="submit" class="btn primary">Apply Filters</button>
-          </form>
-          <div class="listing-results">
-            <div id="listings" class="listing-grid" aria-live="polite"></div>
           </div>
-        </div>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Apply Filters</button>
+          </div>
+        </form>
       </section>
 
       <section class="card" id="agent-tools" hidden>
@@ -137,6 +146,11 @@
             <label>Description
               <textarea name="description" rows="4" placeholder="Highlight the best features and nearby amenities." required></textarea>
             </label>
+            <label class="file-input">Property Photos
+              <input type="file" name="photos" accept="image/*" multiple />
+              <span class="form-hint">Upload a few images to help buyers preview the space.</span>
+              <div id="listing-photo-previews" class="photo-previews" hidden aria-live="polite"></div>
+            </label>
           </div>
           <div class="form-section">
             <h3>Property Address</h3>
@@ -161,8 +175,18 @@
               <input type="text" name="features" placeholder="Heated garage, rooftop deck" />
             </label>
           </div>
-          <button type="submit" class="btn primary">Publish Listing</button>
+          <div class="form-actions">
+            <button type="submit" id="listing-submit" class="btn primary">Publish Listing</button>
+            <button type="button" id="listing-cancel" class="btn" hidden>Cancel</button>
+          </div>
         </form>
+        <div class="form-section" id="agent-listings-section">
+          <h3>Your Listings</h3>
+          <p class="form-section__description">
+            Review everything you have shared with the network and update the status as deals progress.
+          </p>
+          <div id="agent-listings" class="listing-grid listing-grid--manage" aria-live="polite"></div>
+        </div>
       </section>
 
       <section class="card" id="saved-searches" hidden>
@@ -210,13 +234,46 @@
 
     <template id="listing-template">
       <article class="listing">
-        <div class="listing__header">
-          <h3 class="listing__title"></h3>
-          <span class="listing__price"></span>
+        <figure class="listing__image" hidden>
+          <img src="" alt="" loading="lazy" />
+        </figure>
+        <div class="listing__content">
+          <div class="listing__header">
+            <h3 class="listing__title"></h3>
+            <span class="listing__price"></span>
+          </div>
+          <p class="listing__meta"></p>
+          <p class="listing__description"></p>
+          <p class="listing__agent"></p>
         </div>
-        <p class="listing__meta"></p>
-        <p class="listing__description"></p>
-        <p class="listing__agent"></p>
+      </article>
+    </template>
+
+    <template id="agent-listing-template">
+      <article class="listing listing--manage">
+        <figure class="listing__image" hidden>
+          <img src="" alt="" loading="lazy" />
+        </figure>
+        <div class="listing__content">
+          <div class="listing__header">
+            <h3 class="listing__title"></h3>
+            <span class="listing__price"></span>
+          </div>
+          <p class="listing__meta"></p>
+          <p class="listing__description"></p>
+          <div class="listing__status-row">
+            <span class="listing__status-badge" data-status></span>
+            <div class="listing__status-actions">
+              <button type="button" class="btn btn--small" data-status-action="active">Mark Active</button>
+              <button type="button" class="btn btn--small" data-status-action="pending">Mark Under Contract</button>
+              <button type="button" class="btn btn--small" data-status-action="sold">Mark Sold</button>
+            </div>
+          </div>
+          <div class="listing__actions">
+            <button type="button" class="btn btn--small" data-action="edit">Edit</button>
+            <button type="button" class="btn btn--small btn--danger" data-action="delete">Delete</button>
+          </div>
+        </div>
       </article>
     </template>
 
