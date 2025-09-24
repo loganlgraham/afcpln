@@ -177,7 +177,7 @@ router.post('/', authenticate, async (req, res, next) => {
     await populateConversation(conversation);
 
     const payload = sanitizeConversation(conversation);
-    notifyConversationParticipant(payload, req.user?._id, trimmed);
+    await notifyConversationParticipant(payload, req.user?._id, trimmed);
     res.status(wasNew ? 201 : 200).json(payload);
   } catch (error) {
     if (error.code === 11000) {
@@ -217,7 +217,7 @@ router.post('/:id/messages', authenticate, async (req, res, next) => {
     await populateConversation(conversation);
 
     const payload = sanitizeConversation(conversation);
-    notifyConversationParticipant(payload, req.user?._id, trimmed);
+    await notifyConversationParticipant(payload, req.user?._id, trimmed);
     res.json(payload);
   } catch (error) {
     next(error);

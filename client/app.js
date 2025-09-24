@@ -6,16 +6,17 @@ const elements = {
   loginForm: document.getElementById('login-form'),
   registerForm: document.getElementById('register-form'),
   listingForm: document.getElementById('listing-form'),
-  savedSearchForm: document.getElementById('saved-search-form'),
   filtersForm: document.getElementById('filters'),
   listingsContainer: document.getElementById('listings'),
-  savedSearchList: document.getElementById('saved-search-list'),
   listingResultsSection: document.getElementById('listing-results'),
   listingSearchSection: document.getElementById('listing-search'),
-  savedSearchesSection: document.getElementById('saved-searches'),
   agentToolsSection: document.getElementById('agent-tools'),
   authSection: document.getElementById('auth-section'),
+  authModal: document.getElementById('auth-modal'),
+  appShell: document.getElementById('app-shell'),
   userStatus: document.getElementById('user-status'),
+  heroActionButtons: document.getElementById('hero-action-buttons'),
+  savedSearchToggle: document.getElementById('saved-search-toggle'),
   listingTemplate: document.getElementById('listing-template'),
   agentListingTemplate: document.getElementById('agent-listing-template'),
   tabs: document.querySelectorAll('.tab'),
@@ -33,6 +34,7 @@ const elements = {
   conversationModalEmpty: document.getElementById('conversation-modal-empty'),
   conversationModalPlaceholder: document.querySelector('#conversation-modal [data-modal-placeholder]'),
   messageCenterToggle: document.getElementById('message-center-toggle'),
+  logoutToggle: document.getElementById('logout-toggle'),
   listingSubmitButton: document.getElementById('listing-submit'),
   listingCancelButton: document.getElementById('listing-cancel')
 };
@@ -41,7 +43,6 @@ const state = {
   token: null,
   user: null,
   listings: [],
-  savedSearches: [],
   myListings: [],
   activeFilters: {},
   editingListingId: null,
@@ -123,7 +124,6 @@ function clearAuthForms() {
 function handleLogout() {
   state.token = null;
   state.user = null;
-  state.savedSearches = [];
   state.listings = [];
   state.myListings = [];
   state.activeFilters = {};
@@ -162,6 +162,10 @@ function updateUserStatus() {
   const isGuest = !state.user;
   statusEl.classList.toggle('hero__status--guest', isGuest);
 
+  if (elements.heroActionButtons) {
+    elements.heroActionButtons.hidden = isGuest;
+  }
+
   if (elements.messageCenterToggle) {
     elements.messageCenterToggle.hidden = isGuest;
     elements.messageCenterToggle.disabled = isGuest;
@@ -169,6 +173,17 @@ function updateUserStatus() {
     if (isGuest) {
       elements.messageCenterToggle.classList.remove('hero__icon-button--active');
     }
+  }
+
+  if (elements.savedSearchToggle) {
+    const shouldShowSavedSearch = !isGuest && state.user.role === 'user';
+    elements.savedSearchToggle.hidden = !shouldShowSavedSearch;
+    elements.savedSearchToggle.disabled = !shouldShowSavedSearch;
+  }
+
+  if (elements.logoutToggle) {
+    elements.logoutToggle.hidden = isGuest;
+    elements.logoutToggle.disabled = isGuest;
   }
 
   if (isGuest) {
@@ -187,24 +202,24 @@ function updateUserStatus() {
       <div class="status-name">${state.user.fullName}</div>
       <div class="status-role">${roleLabel}</div>
     </div>
-    <button class="btn btn--ghost" id="logout-btn" type="button">Log out</button>
   `;
-
-  const logoutBtn = document.getElementById('logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', handleLogout);
-  }
 }
 
 function toggleSections() {
   const isAuthenticated = Boolean(state.user);
+  if (elements.authModal) {
+    elements.authModal.hidden = isAuthenticated;
+  }
+  if (elements.appShell) {
+    elements.appShell.hidden = !isAuthenticated;
+  }
+  document.body.classList.toggle('has-auth-modal', !isAuthenticated);
   elements.authSection.hidden = isAuthenticated;
   if (elements.listingResultsSection) {
     elements.listingResultsSection.hidden = !isAuthenticated;
   }
   elements.listingSearchSection.hidden = !isAuthenticated;
   elements.agentToolsSection.hidden = !isAuthenticated || state.user.role !== 'agent';
-  elements.savedSearchesSection.hidden = !isAuthenticated || state.user.role !== 'user';
   if (elements.buyerMessagesSection) {
     elements.buyerMessagesSection.hidden = true;
   }
@@ -216,7 +231,6 @@ function updateUI() {
   if (state.user) {
     fetchListings();
     if (state.user.role === 'user') {
-      fetchSavedSearches();
       fetchBuyerConversations();
     }
     if (state.user.role === 'agent') {
@@ -228,7 +242,6 @@ function updateUI() {
     }
   } else {
     elements.listingsContainer.innerHTML = '';
-    elements.savedSearchList.innerHTML = '';
     if (elements.agentListingsContainer) {
       elements.agentListingsContainer.innerHTML = '';
     }
@@ -1144,6 +1157,14 @@ function handleListingCardClick(event) {
   openConversationModal({ listingId, listing: fallbackListing, conversation });
 }
 
+function handleSavedSearchToggleClick() {
+  if (!state.user || state.user.role !== 'user') {
+    return;
+  }
+
+  window.location.href = 'saved-searches.html';
+}
+
 function renderBuyerConversations() {
   if (!elements.buyerMessagesContainer) {
     return;
@@ -1154,6 +1175,10 @@ function renderBuyerConversations() {
 
   if (!state.user || state.user.role !== 'user') {
     return;
+  }
+
+  if (elements.buyerMessagesSection) {
+    elements.buyerMessagesSection.hidden = false;
   }
 
   sortConversations(state.buyerConversations);
@@ -1606,27 +1631,6 @@ function renderAgentListings(listings) {
   container.append(fragment);
 }
 
-function renderSavedSearches(searches) {
-  elements.savedSearchList.innerHTML = '';
-  if (!searches.length) {
-    elements.savedSearchList.innerHTML = '<div class="empty-state">Create a saved search to receive instant matches.</div>';
-    return;
-  }
-
-  searches.forEach((search) => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'saved-search';
-    wrapper.innerHTML = `
-      <div class="saved-search__info">
-        <p class="saved-search__name">${search.name}</p>
-        <p class="saved-search__meta">Areas: ${search.areas.join(', ')}${search.minPrice ? ` • Min ${formatPrice(search.minPrice)}` : ''}${search.maxPrice ? ` • Max ${formatPrice(search.maxPrice)}` : ''}</p>
-      </div>
-      <button class="btn" data-delete="${search._id}">Remove</button>
-    `;
-    elements.savedSearchList.append(wrapper);
-  });
-}
-
 async function fetchListings(filters) {
   if (!state.user) {
     return;
@@ -1663,17 +1667,6 @@ async function fetchMyListings() {
     if (elements.agentListingsContainer) {
       elements.agentListingsContainer.innerHTML = `<div class="empty-state">${error.message}</div>`;
     }
-  }
-}
-
-async function fetchSavedSearches() {
-  try {
-    const searches = await apiRequest('/users/me/saved-searches');
-    state.savedSearches = searches;
-    renderSavedSearches(searches);
-  } catch (error) {
-    console.error(error);
-    elements.savedSearchList.innerHTML = `<div class="empty-state">${error.message}</div>`;
   }
 }
 
@@ -1826,44 +1819,6 @@ async function handleListingSubmit(event) {
   }
 }
 
-async function handleSavedSearchSubmit(event) {
-  event.preventDefault();
-  removeAlert(elements.savedSearchForm);
-  const data = extractFormData(elements.savedSearchForm);
-  const payload = {
-    name: data.name,
-    areas: data.areas.split(',').map((item) => item.trim()).filter(Boolean),
-    keywords: data.keywords ? data.keywords.split(',').map((item) => item.trim()).filter(Boolean) : [],
-    minPrice: parseNumber(data.minPrice),
-    maxPrice: parseNumber(data.maxPrice),
-    minBedrooms: parseNumber(data.minBedrooms),
-    minBathrooms: parseNumber(data.minBathrooms)
-  };
-
-  try {
-    await apiRequest('/users/me/saved-searches', { method: 'POST', body: payload });
-    elements.savedSearchForm.reset();
-    showAlert(elements.savedSearchForm, 'Saved search created! We will email new matches.', 'success');
-    fetchSavedSearches();
-  } catch (error) {
-    showAlert(elements.savedSearchForm, error.message);
-  }
-}
-
-function handleSavedSearchClick(event) {
-  const button = event.target.closest('[data-delete]');
-  if (!button) return;
-
-  const searchId = button.dataset.delete;
-  apiRequest(`/users/me/saved-searches/${searchId}`, { method: 'DELETE' })
-    .then(() => {
-      fetchSavedSearches();
-    })
-    .catch((error) => {
-      showAlert(elements.savedSearchForm, error.message);
-    });
-}
-
 function handleAgentListingsClick(event) {
   const statusButton = event.target.closest('[data-status-action]');
   if (statusButton) {
@@ -2013,14 +1968,6 @@ function bootstrap() {
     elements.listingPhotoInput.addEventListener('change', handleListingPhotoChange);
   }
 
-  if (elements.savedSearchForm) {
-    elements.savedSearchForm.addEventListener('submit', handleSavedSearchSubmit);
-  }
-
-  if (elements.savedSearchList) {
-    elements.savedSearchList.addEventListener('click', handleSavedSearchClick);
-  }
-
   if (elements.filtersForm) {
     elements.filtersForm.addEventListener('submit', handleFilterSubmit);
   }
@@ -2048,6 +1995,14 @@ function bootstrap() {
 
   if (elements.messageCenterToggle) {
     elements.messageCenterToggle.addEventListener('click', handleMessageCenterToggle);
+  }
+
+  if (elements.savedSearchToggle) {
+    elements.savedSearchToggle.addEventListener('click', handleSavedSearchToggleClick);
+  }
+
+  if (elements.logoutToggle) {
+    elements.logoutToggle.addEventListener('click', handleLogout);
   }
 
   document.addEventListener('keydown', handleGlobalKeydown);
