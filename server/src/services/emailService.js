@@ -1,9 +1,12 @@
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const EmailLog = require('../models/EmailLog');
 
 const fromAddress = process.env.EMAIL_FROM || 'no-reply@afcpln.local';
 
 let transportMetadata = { type: 'json' };
+let transporter;
+let resendClient;
 
 function normalizeBool(value, fallback = false) {
   if (value === undefined || value === null || value === '') {
@@ -64,7 +67,21 @@ function createTransport() {
   return nodemailer.createTransport({ jsonTransport: true });
 }
 
-const transporter = createTransport();
+function initializeTransport() {
+  if (process.env.RESEND_API_KEY) {
+    try {
+      resendClient = new Resend(process.env.RESEND_API_KEY);
+      transportMetadata = { type: 'resend' };
+      return;
+    } catch (error) {
+      console.error('Failed to initialize Resend email transport, falling back to Nodemailer', error);
+    }
+  }
+
+  transporter = createTransport();
+}
+
+initializeTransport();
 
 let loggedJsonTransportNotice = false;
 
@@ -110,10 +127,48 @@ function buildListingEmail({ user, listing, search }) {
   };
 }
 
-async function sendListingMatchEmail(user, listing, search) {
-  const message = buildListingEmail({ user, listing, search });
+function formatTransportResponse(data) {
+  if (!data) {
+    return undefined;
+  }
+
+  if (typeof data === 'string') {
+    return data;
+  }
+
+  try {
+    return JSON.stringify(data);
+  } catch (error) {
+    return String(data);
+  }
+}
+
+async function deliverEmail(message) {
+  if (transportMetadata.type === 'resend' && resendClient) {
+    const result = await resendClient.emails.send({
+      from: message.from,
+      to: message.to,
+      subject: message.subject,
+      text: message.text
+    });
+
+    if (result?.error) {
+      const error = new Error(result.error.message || 'Failed to send email via Resend');
+      error.cause = result.error;
+      throw error;
+    }
+
+    return { provider: 'resend', id: result?.data?.id };
+  }
+
   warnIfJsonTransport();
   const response = await transporter.sendMail(message);
+  return { provider: transportMetadata.type, response };
+}
+
+async function sendListingMatchEmail(user, listing, search) {
+  const message = buildListingEmail({ user, listing, search });
+  const delivery = await deliverEmail(message);
 
   await EmailLog.create({
     user: user._id,
@@ -122,7 +177,7 @@ async function sendListingMatchEmail(user, listing, search) {
     to: message.to,
     subject: message.subject,
     body: message.text,
-    transportResponse: typeof response.message === 'string' ? response.message : JSON.stringify(response.message)
+    transportResponse: formatTransportResponse(delivery)
   });
 }
 
@@ -155,8 +210,7 @@ async function sendRegistrationEmail(user) {
     return;
   }
 
-  warnIfJsonTransport();
-  await transporter.sendMail(message);
+  await deliverEmail(message);
 }
 
 module.exports = {
