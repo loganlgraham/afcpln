@@ -16,7 +16,9 @@ const elements = {
   listingTemplate: document.getElementById('listing-template'),
   tabs: document.querySelectorAll('.tab'),
   tabContents: document.querySelectorAll('.tab-content'),
-  optionalFields: document.querySelectorAll('[data-role="agent"]')
+  optionalFields: document.querySelectorAll('[data-role="agent"]'),
+  listingPhotoInput: document.querySelector('#listing-form input[name="photos"]'),
+  listingPhotoPreviews: document.getElementById('listing-photo-previews')
 };
 
 const state = {
@@ -25,6 +27,14 @@ const state = {
   listings: [],
   savedSearches: []
 };
+
+const LISTING_PHOTO_LIMITS = {
+  maxFiles: 6,
+  maxFileSize: 5 * 1024 * 1024,
+  maxFileSizeLabel: '5MB'
+};
+
+let listingPhotoPreviewUrls = [];
 
 function setActiveTab(tabId = 'login') {
   const tabs = Array.from(elements.tabs || []);
@@ -193,6 +203,122 @@ function removeAlert(form) {
   }
 }
 
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '';
+  }
+
+  const megabyte = 1024 * 1024;
+  if (bytes >= megabyte) {
+    return `${(bytes / megabyte).toFixed(1)} MB`;
+  }
+
+  const kilobyte = 1024;
+  return `${Math.max(1, Math.round(bytes / kilobyte))} KB`;
+}
+
+function validateListingPhotos(photoFiles) {
+  if (!photoFiles.length) {
+    return null;
+  }
+
+  if (photoFiles.length > LISTING_PHOTO_LIMITS.maxFiles) {
+    return `Please select up to ${LISTING_PHOTO_LIMITS.maxFiles} photos.`;
+  }
+
+  const oversizedFile = photoFiles.find((file) => file.size > LISTING_PHOTO_LIMITS.maxFileSize);
+  if (oversizedFile) {
+    return `Each photo must be ${LISTING_PHOTO_LIMITS.maxFileSizeLabel} or smaller.`;
+  }
+
+  return null;
+}
+
+function clearListingPhotoPreviews() {
+  if (!elements.listingPhotoPreviews) {
+    return;
+  }
+
+  if (listingPhotoPreviewUrls.length && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+    listingPhotoPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+  }
+  listingPhotoPreviewUrls = [];
+  elements.listingPhotoPreviews.innerHTML = '';
+  elements.listingPhotoPreviews.hidden = true;
+}
+
+function updateListingPhotoPreviews(files) {
+  if (!elements.listingPhotoPreviews) {
+    return;
+  }
+
+  clearListingPhotoPreviews();
+
+  if (!files.length) {
+    return;
+  }
+
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  files.forEach((file) => {
+    if (!(file instanceof File) || file.size <= 0) {
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    listingPhotoPreviewUrls.push(objectUrl);
+
+    const figure = document.createElement('figure');
+    figure.className = 'photo-preview';
+
+    const img = document.createElement('img');
+    img.src = objectUrl;
+    img.alt = file.name ? `${file.name} preview` : 'Listing photo preview';
+
+    const caption = document.createElement('figcaption');
+    const sizeLabel = formatFileSize(file.size);
+    caption.textContent = sizeLabel ? `${file.name} • ${sizeLabel}` : file.name;
+
+    figure.append(img, caption);
+    fragment.append(figure);
+  });
+
+  if (!fragment.childNodes.length) {
+    return;
+  }
+
+  elements.listingPhotoPreviews.append(fragment);
+  elements.listingPhotoPreviews.hidden = false;
+}
+
+function handleListingPhotoChange(event) {
+  if (!elements.listingForm || typeof File === 'undefined') {
+    return;
+  }
+
+  const files = Array.from(event.target.files || []).filter((file) => file instanceof File && file.size > 0);
+
+  if (!files.length) {
+    clearListingPhotoPreviews();
+    return;
+  }
+
+  const validationError = validateListingPhotos(files);
+  if (validationError) {
+    showAlert(elements.listingForm, validationError);
+    event.target.value = '';
+    clearListingPhotoPreviews();
+    return;
+  }
+
+  removeAlert(elements.listingForm);
+  updateListingPhotoPreviews(files);
+}
+
 function formatPrice(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 }
@@ -206,6 +332,21 @@ function renderListings(listings) {
 
   listings.forEach((listing) => {
     const node = elements.listingTemplate.content.firstElementChild.cloneNode(true);
+    const imageWrapper = node.querySelector('.listing__image');
+    const imageEl = imageWrapper ? imageWrapper.querySelector('img') : null;
+    const firstImage = Array.isArray(listing.images) ? listing.images.find((img) => Boolean(img)) : null;
+
+    if (imageWrapper && imageEl) {
+      if (firstImage) {
+        imageEl.src = firstImage;
+        imageEl.alt = `${listing.title} photo`;
+        imageWrapper.hidden = false;
+      } else {
+        imageEl.removeAttribute('src');
+        imageWrapper.hidden = true;
+      }
+    }
+
     node.querySelector('.listing__title').textContent = listing.title;
     node.querySelector('.listing__price').textContent = formatPrice(listing.price);
     const meta = `${listing.bedrooms} bd • ${listing.bathrooms} ba • ${listing.area}`;
@@ -320,10 +461,59 @@ function parseNumber(value) {
   return value ? Number(value) : undefined;
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof File === 'undefined' || !(file instanceof File)) {
+      resolve(null);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Failed to read file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function handleListingSubmit(event) {
   event.preventDefault();
   removeAlert(elements.listingForm);
-  const data = extractFormData(elements.listingForm);
+  const formData = new FormData(elements.listingForm);
+  const supportsFileUpload = typeof File !== 'undefined';
+  const data = {};
+  formData.forEach((value, key) => {
+    if (key !== 'photos') {
+      data[key] = value;
+    }
+  });
+
+  const rawPhotos = supportsFileUpload ? formData.getAll('photos') : [];
+  const photoFiles = supportsFileUpload
+    ? rawPhotos.filter((file) => file instanceof File && file.size > 0)
+    : [];
+
+  const validationError = validateListingPhotos(photoFiles);
+  if (validationError) {
+    showAlert(elements.listingForm, validationError);
+    return;
+  }
+
+  let encodedImages = [];
+
+  if (photoFiles.length) {
+    try {
+      const conversions = await Promise.all(photoFiles.map((file) => fileToDataUrl(file)));
+      encodedImages = conversions.filter(Boolean);
+    } catch (fileError) {
+      console.error('Failed to process listing photos', fileError);
+      showAlert(
+        elements.listingForm,
+        'We could not process one of the selected photos. Please try again with different images.'
+      );
+      return;
+    }
+  }
+
   const payload = {
     title: data.title,
     description: data.description,
@@ -341,11 +531,24 @@ async function handleListingSubmit(event) {
     }
   };
 
+  if (encodedImages.length) {
+    payload.images = encodedImages;
+  }
+
   try {
     await apiRequest('/listings', { method: 'POST', body: payload });
     elements.listingForm.reset();
+    clearListingPhotoPreviews();
+    if (elements.listingPhotoInput) {
+      elements.listingPhotoInput.value = '';
+    }
     showAlert(elements.listingForm, 'Listing published! Buyers with matching searches will be notified.', 'success');
-    fetchListings(Object.fromEntries(new FormData(elements.filtersForm)));
+    if (elements.filtersForm) {
+      const filters = Object.fromEntries(new FormData(elements.filtersForm).entries());
+      fetchListings(filters);
+    } else {
+      fetchListings();
+    }
   } catch (error) {
     showAlert(elements.listingForm, error.message);
   }
@@ -453,6 +656,17 @@ function bootstrap() {
 
   if (elements.listingForm) {
     elements.listingForm.addEventListener('submit', handleListingSubmit);
+    elements.listingForm.addEventListener('reset', () => {
+      clearListingPhotoPreviews();
+      if (elements.listingPhotoInput) {
+        elements.listingPhotoInput.value = '';
+      }
+      removeAlert(elements.listingForm);
+    });
+  }
+
+  if (elements.listingPhotoInput) {
+    elements.listingPhotoInput.addEventListener('change', handleListingPhotoChange);
   }
 
   if (elements.savedSearchForm) {

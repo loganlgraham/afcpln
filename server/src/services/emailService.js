@@ -1,9 +1,30 @@
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const EmailLog = require('../models/EmailLog');
 
-const fromAddress = process.env.EMAIL_FROM || 'no-reply@afcpln.local';
+const brandName =
+  typeof process.env.EMAIL_FROM_NAME === 'string' && process.env.EMAIL_FROM_NAME.trim()
+    ? process.env.EMAIL_FROM_NAME.trim()
+    : 'AFC Private Listings';
 
-let transportMetadata = { type: 'json' };
+const DEFAULT_RESEND_DOMAIN = 'lgweb.app';
+
+const hasResendConfigured = Boolean(process.env.RESEND_API_KEY);
+
+const resendDomain =
+  typeof process.env.RESEND_DOMAIN === 'string' && process.env.RESEND_DOMAIN.trim()
+    ? process.env.RESEND_DOMAIN.trim()
+    : hasResendConfigured
+      ? DEFAULT_RESEND_DOMAIN
+      : '';
+
+const fromAddress = resolveFromAddress();
+
+let activeTransport = { type: 'json' };
+let transporter;
+let resendClient;
+let fallbackTransport;
+let fallbackMetadata;
 
 function normalizeBool(value, fallback = false) {
   if (value === undefined || value === null || value === '') {
@@ -26,60 +47,184 @@ function normalizeBool(value, fallback = false) {
   return fallback;
 }
 
-function createTransport() {
+function formatSenderAddress(value) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.includes('<') && trimmed.includes('>')) {
+    return trimmed;
+  }
+
+  return `${brandName} <${trimmed}>`;
+}
+
+function pickFirstSender(candidates = []) {
+  for (const candidate of candidates) {
+    const formatted = formatSenderAddress(candidate);
+    if (formatted) {
+      return formatted;
+    }
+  }
+
+  return null;
+}
+
+function resolveFromAddress() {
+  const explicit = pickFirstSender([
+    process.env.EMAIL_FROM,
+    process.env.RESEND_FROM,
+    process.env.RESEND_FROM_EMAIL,
+    process.env.RESEND_SENDER,
+    process.env.RESEND_FROM_ADDRESS
+  ]);
+
+  if (explicit) {
+    return explicit;
+  }
+
+  if (resendDomain) {
+    const domainBased = pickFirstSender([`hello@${resendDomain}`, `no-reply@${resendDomain}`]);
+    if (domainBased) {
+      return domainBased;
+    }
+  }
+
+  if (hasResendConfigured) {
+    return formatSenderAddress('onboarding@resend.dev');
+  }
+
+  return formatSenderAddress('no-reply@lgweb.app');
+}
+
+function createNodemailerTransport() {
   const explicitJson = (process.env.EMAIL_TRANSPORT || '').toLowerCase() === 'json';
   if (explicitJson) {
-    transportMetadata = { type: 'json', reason: 'EMAIL_TRANSPORT=json' };
-    return nodemailer.createTransport({ jsonTransport: true });
+    return {
+      transporter: nodemailer.createTransport({ jsonTransport: true }),
+      metadata: { type: 'json', reason: 'EMAIL_TRANSPORT=json' }
+    };
   }
 
   if (process.env.SMTP_URL) {
-    transportMetadata = { type: 'smtp-url' };
-    return nodemailer.createTransport(process.env.SMTP_URL);
+    return {
+      transporter: nodemailer.createTransport(process.env.SMTP_URL),
+      metadata: { type: 'smtp-url' }
+    };
   }
 
   if (process.env.SMTP_HOST) {
     const port = Number.parseInt(process.env.SMTP_PORT, 10) || 587;
     const secure = normalizeBool(process.env.SMTP_SECURE, port === 465);
-    transportMetadata = {
-      type: 'smtp',
-      host: process.env.SMTP_HOST,
-      port,
-      secure
-    };
-
     const auth = process.env.SMTP_USER
       ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
       : undefined;
 
-    return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port,
-      secure,
-      auth
-    });
+    return {
+      transporter: nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port,
+        secure,
+        auth
+      }),
+      metadata: {
+        type: 'smtp',
+        host: process.env.SMTP_HOST,
+        port,
+        secure
+      }
+    };
   }
 
-  transportMetadata = { type: 'json' };
-  return nodemailer.createTransport({ jsonTransport: true });
+  return {
+    transporter: nodemailer.createTransport({ jsonTransport: true }),
+    metadata: { type: 'json' }
+  };
 }
 
-const transporter = createTransport();
+function initializeTransport() {
+  if (hasResendConfigured) {
+    try {
+      resendClient = new Resend(process.env.RESEND_API_KEY);
+      activeTransport = { type: 'resend' };
+      return;
+    } catch (error) {
+      console.error('Failed to initialize Resend email transport, falling back to Nodemailer', error);
+    }
+  }
+
+  const nodemailerTransport = createNodemailerTransport();
+  transporter = nodemailerTransport.transporter;
+  activeTransport = nodemailerTransport.metadata;
+}
+
+function ensureFallbackTransport() {
+  if (fallbackTransport && fallbackMetadata) {
+    return { transporter: fallbackTransport, metadata: fallbackMetadata };
+  }
+
+  const nodemailerTransport = createNodemailerTransport();
+  fallbackTransport = nodemailerTransport.transporter;
+  fallbackMetadata = nodemailerTransport.metadata;
+  return { transporter: fallbackTransport, metadata: fallbackMetadata };
+}
+
+initializeTransport();
 
 let loggedJsonTransportNotice = false;
 
-function warnIfJsonTransport() {
+function warnIfJsonTransport(metadata = activeTransport) {
   if (loggedJsonTransportNotice) {
     return;
   }
 
-  if (transportMetadata.type === 'json' && process.env.NODE_ENV !== 'test') {
+  if (metadata && metadata.type === 'json' && process.env.NODE_ENV !== 'test') {
     console.warn(
       'Email transport is configured for JSON output. Set SMTP_URL or SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS to send real emails.'
     );
+    loggedJsonTransportNotice = true;
+  }
+}
+
+function extractErrorMessage(error) {
+  if (!error) {
+    return '';
   }
 
-  loggedJsonTransportNotice = true;
+  if (typeof error.message === 'string' && error.message.trim()) {
+    return error.message;
+  }
+
+  if (error.response && error.response.body && typeof error.response.body.message === 'string') {
+    return error.response.body.message;
+  }
+
+  if (error.cause) {
+    return extractErrorMessage(error.cause);
+  }
+
+  return '';
+}
+
+function interpretResendError(error) {
+  const message = extractErrorMessage(error);
+  const statusCode =
+    (error && error.statusCode) || (error && error.cause && error.cause.statusCode) || undefined;
+
+  if (statusCode === 403 || /verify a domain/i.test(message) || /not authorized/i.test(message)) {
+    return 'Resend rejected the sender address. Verify your domain in Resend and set EMAIL_FROM to an address on that domain.';
+  }
+
+  if (message) {
+    return message;
+  }
+
+  return 'Failed to send email via Resend.';
 }
 
 function buildListingEmail({ user, listing, search }) {
@@ -110,10 +255,74 @@ function buildListingEmail({ user, listing, search }) {
   };
 }
 
+function formatTransportResponse(data) {
+  if (!data) {
+    return undefined;
+  }
+
+  if (typeof data === 'string') {
+    return data;
+  }
+
+  try {
+    return JSON.stringify(data);
+  } catch (error) {
+    return String(data);
+  }
+}
+
+async function deliverEmail(message) {
+  if (activeTransport.type === 'resend' && resendClient) {
+    try {
+      const result = await resendClient.emails.send({
+        from: message.from,
+        to: message.to,
+        subject: message.subject,
+        text: message.text
+      });
+
+      if (result && result.error) {
+        const resendError = new Error(result.error.message || 'Failed to send email via Resend');
+        resendError.cause = result.error;
+        resendError.statusCode = result.error.statusCode;
+        throw resendError;
+      }
+
+      return { provider: 'resend', id: result && result.data ? result.data.id : undefined };
+    } catch (error) {
+      const fallback = ensureFallbackTransport();
+      const friendlyMessage = interpretResendError(error);
+
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn(
+          `Resend delivery failed${friendlyMessage ? ` (${friendlyMessage})` : ''}. Falling back to ${fallback.metadata.type} transport.`
+        );
+      }
+
+      warnIfJsonTransport(fallback.metadata);
+      const response = await fallback.transporter.sendMail(message);
+      return {
+        provider: `resend-fallback:${fallback.metadata.type}`,
+        response,
+        error: friendlyMessage
+      };
+    }
+  }
+
+  if (!transporter) {
+    const fallback = ensureFallbackTransport();
+    transporter = fallback.transporter;
+    activeTransport = fallback.metadata;
+  }
+
+  warnIfJsonTransport(activeTransport);
+  const response = await transporter.sendMail(message);
+  return { provider: activeTransport.type, response };
+}
+
 async function sendListingMatchEmail(user, listing, search) {
   const message = buildListingEmail({ user, listing, search });
-  warnIfJsonTransport();
-  const response = await transporter.sendMail(message);
+  const delivery = await deliverEmail(message);
 
   await EmailLog.create({
     user: user._id,
@@ -122,7 +331,7 @@ async function sendListingMatchEmail(user, listing, search) {
     to: message.to,
     subject: message.subject,
     body: message.text,
-    transportResponse: typeof response.message === 'string' ? response.message : JSON.stringify(response.message)
+    transportResponse: formatTransportResponse(delivery)
   });
 }
 
@@ -155,11 +364,11 @@ async function sendRegistrationEmail(user) {
     return;
   }
 
-  warnIfJsonTransport();
-  await transporter.sendMail(message);
+  await deliverEmail(message);
 }
 
 module.exports = {
   sendListingMatchEmail,
   sendRegistrationEmail
 };
+
