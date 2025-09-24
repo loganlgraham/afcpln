@@ -16,7 +16,9 @@ const elements = {
   listingTemplate: document.getElementById('listing-template'),
   tabs: document.querySelectorAll('.tab'),
   tabContents: document.querySelectorAll('.tab-content'),
-  optionalFields: document.querySelectorAll('[data-role="agent"]')
+  optionalFields: document.querySelectorAll('[data-role="agent"]'),
+  listingPhotoInput: document.querySelector('#listing-form input[name="photos"]'),
+  listingPhotoPreviews: document.getElementById('listing-photo-previews')
 };
 
 const state = {
@@ -25,6 +27,14 @@ const state = {
   listings: [],
   savedSearches: []
 };
+
+const LISTING_PHOTO_LIMITS = {
+  maxFiles: 6,
+  maxFileSize: 5 * 1024 * 1024,
+  maxFileSizeLabel: '5MB'
+};
+
+let listingPhotoPreviewUrls = [];
 
 function setActiveTab(tabId = 'login') {
   const tabs = Array.from(elements.tabs || []);
@@ -191,6 +201,122 @@ function removeAlert(form) {
   if (existing) {
     existing.remove();
   }
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '';
+  }
+
+  const megabyte = 1024 * 1024;
+  if (bytes >= megabyte) {
+    return `${(bytes / megabyte).toFixed(1)} MB`;
+  }
+
+  const kilobyte = 1024;
+  return `${Math.max(1, Math.round(bytes / kilobyte))} KB`;
+}
+
+function validateListingPhotos(photoFiles) {
+  if (!photoFiles.length) {
+    return null;
+  }
+
+  if (photoFiles.length > LISTING_PHOTO_LIMITS.maxFiles) {
+    return `Please select up to ${LISTING_PHOTO_LIMITS.maxFiles} photos.`;
+  }
+
+  const oversizedFile = photoFiles.find((file) => file.size > LISTING_PHOTO_LIMITS.maxFileSize);
+  if (oversizedFile) {
+    return `Each photo must be ${LISTING_PHOTO_LIMITS.maxFileSizeLabel} or smaller.`;
+  }
+
+  return null;
+}
+
+function clearListingPhotoPreviews() {
+  if (!elements.listingPhotoPreviews) {
+    return;
+  }
+
+  if (listingPhotoPreviewUrls.length && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+    listingPhotoPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+  }
+  listingPhotoPreviewUrls = [];
+  elements.listingPhotoPreviews.innerHTML = '';
+  elements.listingPhotoPreviews.hidden = true;
+}
+
+function updateListingPhotoPreviews(files) {
+  if (!elements.listingPhotoPreviews) {
+    return;
+  }
+
+  clearListingPhotoPreviews();
+
+  if (!files.length) {
+    return;
+  }
+
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  files.forEach((file) => {
+    if (!(file instanceof File) || file.size <= 0) {
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    listingPhotoPreviewUrls.push(objectUrl);
+
+    const figure = document.createElement('figure');
+    figure.className = 'photo-preview';
+
+    const img = document.createElement('img');
+    img.src = objectUrl;
+    img.alt = file.name ? `${file.name} preview` : 'Listing photo preview';
+
+    const caption = document.createElement('figcaption');
+    const sizeLabel = formatFileSize(file.size);
+    caption.textContent = sizeLabel ? `${file.name} • ${sizeLabel}` : file.name;
+
+    figure.append(img, caption);
+    fragment.append(figure);
+  });
+
+  if (!fragment.childNodes.length) {
+    return;
+  }
+
+  elements.listingPhotoPreviews.append(fragment);
+  elements.listingPhotoPreviews.hidden = false;
+}
+
+function handleListingPhotoChange(event) {
+  if (!elements.listingForm || typeof File === 'undefined') {
+    return;
+  }
+
+  const files = Array.from(event.target.files || []).filter((file) => file instanceof File && file.size > 0);
+
+  if (!files.length) {
+    clearListingPhotoPreviews();
+    return;
+  }
+
+  const validationError = validateListingPhotos(files);
+  if (validationError) {
+    showAlert(elements.listingForm, validationError);
+    event.target.value = '';
+    clearListingPhotoPreviews();
+    return;
+  }
+
+  removeAlert(elements.listingForm);
+  updateListingPhotoPreviews(files);
 }
 
 function formatPrice(value) {
@@ -366,17 +492,9 @@ async function handleListingSubmit(event) {
     ? rawPhotos.filter((file) => file instanceof File && file.size > 0)
     : [];
 
-  const MAX_FILES = 6;
-  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-
-  if (photoFiles.length > MAX_FILES) {
-    showAlert(elements.listingForm, `Please select up to ${MAX_FILES} photos.`);
-    return;
-  }
-
-  const oversizedFile = photoFiles.find((file) => file.size > MAX_FILE_SIZE);
-  if (oversizedFile) {
-    showAlert(elements.listingForm, 'Each photo must be 5MB or smaller.');
+  const validationError = validateListingPhotos(photoFiles);
+  if (validationError) {
+    showAlert(elements.listingForm, validationError);
     return;
   }
 
@@ -420,6 +538,10 @@ async function handleListingSubmit(event) {
   try {
     await apiRequest('/listings', { method: 'POST', body: payload });
     elements.listingForm.reset();
+    clearListingPhotoPreviews();
+    if (elements.listingPhotoInput) {
+      elements.listingPhotoInput.value = '';
+    }
     showAlert(elements.listingForm, 'Listing published! Buyers with matching searches will be notified.', 'success');
     if (elements.filtersForm) {
       const filters = Object.fromEntries(new FormData(elements.filtersForm).entries());
@@ -534,6 +656,17 @@ function bootstrap() {
 
   if (elements.listingForm) {
     elements.listingForm.addEventListener('submit', handleListingSubmit);
+    elements.listingForm.addEventListener('reset', () => {
+      clearListingPhotoPreviews();
+      if (elements.listingPhotoInput) {
+        elements.listingPhotoInput.value = '';
+      }
+      removeAlert(elements.listingForm);
+    });
+  }
+
+  if (elements.listingPhotoInput) {
+    elements.listingPhotoInput.addEventListener('change', handleListingPhotoChange);
   }
 
   if (elements.savedSearchForm) {
