@@ -9,11 +9,11 @@ const elements = {
   filtersForm: document.getElementById('filters'),
   listingsContainer: document.getElementById('listings'),
   listingResultsSection: document.getElementById('listing-results'),
-  listingSearchSection: document.getElementById('listing-search'),
   agentToolsSection: document.getElementById('agent-tools'),
   authSection: document.getElementById('auth-section'),
   authModal: document.getElementById('auth-modal'),
   appShell: document.getElementById('app-shell'),
+  dashboardPrimary: document.querySelector('.dashboard__primary'),
   userStatus: document.getElementById('user-status'),
   heroActionButtons: document.getElementById('hero-action-buttons'),
   savedSearchToggle: document.getElementById('saved-search-toggle'),
@@ -69,6 +69,13 @@ const LISTING_STATUS_LABELS = {
 };
 
 let listingPhotoPreviewUrls = [];
+
+const layoutAnchors = {
+  agentToolsParent: elements.agentToolsSection?.parentElement || null,
+  agentToolsNextSibling: elements.agentToolsSection?.nextElementSibling || null
+};
+
+const conversationStatusTimers = new WeakMap();
 
 function getUserId() {
   if (!state.user) {
@@ -205,8 +212,46 @@ function updateUserStatus() {
   `;
 }
 
+function syncDashboardLayout() {
+  if (!elements.appShell) {
+    return;
+  }
+
+  const isAgent = Boolean(state.user && state.user.role === 'agent');
+  const isBuyer = Boolean(state.user && state.user.role !== 'agent');
+
+  elements.appShell.classList.toggle('dashboard--agent', isAgent);
+  elements.appShell.classList.toggle('dashboard--buyer', isBuyer);
+
+  if (isAgent) {
+    if (elements.dashboardPrimary && elements.agentToolsSection) {
+      elements.dashboardPrimary.prepend(elements.agentToolsSection);
+    }
+    if (elements.dashboardPrimary && elements.listingResultsSection) {
+      elements.dashboardPrimary.append(elements.listingResultsSection);
+    }
+    return;
+  }
+
+  if (
+    layoutAnchors.agentToolsParent &&
+    elements.agentToolsSection &&
+    elements.agentToolsSection.parentElement !== layoutAnchors.agentToolsParent
+  ) {
+    layoutAnchors.agentToolsParent.insertBefore(
+      elements.agentToolsSection,
+      layoutAnchors.agentToolsNextSibling || null
+    );
+  }
+
+  if (elements.dashboardPrimary && elements.listingResultsSection) {
+    elements.dashboardPrimary.prepend(elements.listingResultsSection);
+  }
+}
+
 function toggleSections() {
   const isAuthenticated = Boolean(state.user);
+  const isAgent = Boolean(state.user && state.user.role === 'agent');
   if (elements.authModal) {
     elements.authModal.hidden = isAuthenticated;
   }
@@ -218,11 +263,14 @@ function toggleSections() {
   if (elements.listingResultsSection) {
     elements.listingResultsSection.hidden = !isAuthenticated;
   }
-  elements.listingSearchSection.hidden = !isAuthenticated;
-  elements.agentToolsSection.hidden = !isAuthenticated || state.user.role !== 'agent';
+  if (elements.agentToolsSection) {
+    elements.agentToolsSection.hidden = !isAuthenticated || !isAgent;
+  }
   if (elements.buyerMessagesSection) {
     elements.buyerMessagesSection.hidden = true;
   }
+
+  syncDashboardLayout();
 }
 
 function updateUI() {
@@ -777,6 +825,12 @@ function setConversationStatus(container, message, type = 'info') {
     return;
   }
 
+  const existingTimeout = conversationStatusTimers.get(container);
+  if (existingTimeout) {
+    clearTimeout(existingTimeout);
+    conversationStatusTimers.delete(container);
+  }
+
   statusEl.textContent = message || '';
   statusEl.hidden = !message;
   statusEl.classList.remove('conversation__status--error', 'conversation__status--success');
@@ -790,6 +844,27 @@ function setConversationStatus(container, message, type = 'info') {
 
 function clearConversationStatus(container) {
   setConversationStatus(container, '');
+}
+
+function flashConversationStatus(container, message, type = 'info', duration = 4000) {
+  if (!container) {
+    return;
+  }
+
+  setConversationStatus(container, message, type);
+
+  if (!message) {
+    return;
+  }
+
+  const timeoutId = window.setTimeout(() => {
+    if (conversationStatusTimers.get(container) === timeoutId) {
+      conversationStatusTimers.delete(container);
+      setConversationStatus(container, '');
+    }
+  }, duration);
+
+  conversationStatusTimers.set(container, timeoutId);
 }
 
 function resetConversationForm(container) {
@@ -1113,7 +1188,7 @@ async function sendListingMessage(listingId, form, containerOverride = null) {
     if (textarea) {
       textarea.value = '';
     }
-    setConversationStatus(container, 'Message sent', 'success');
+    flashConversationStatus(container, 'Message sent', 'success');
   } catch (error) {
     setConversationStatus(container, error.message || 'Unable to send message.', 'error');
   } finally {

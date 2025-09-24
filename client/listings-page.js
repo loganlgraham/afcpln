@@ -4,7 +4,8 @@ const API_BASE = '/api';
 
 const elements = {
   listings: document.getElementById('public-listings'),
-  template: document.getElementById('listing-template')
+  template: document.getElementById('listing-template'),
+  filtersForm: document.getElementById('public-filters')
 };
 
 const state = {
@@ -12,8 +13,11 @@ const state = {
   user: null,
   listings: [],
   listingConversations: {},
-  openConversations: new Set()
+  openConversations: new Set(),
+  activeFilters: {}
 };
+
+const conversationStatusTimers = new WeakMap();
 
 function restoreAuth() {
   try {
@@ -165,6 +169,12 @@ function setConversationStatus(container, message, type = 'info') {
     return;
   }
 
+  const existingTimeout = conversationStatusTimers.get(container);
+  if (existingTimeout) {
+    clearTimeout(existingTimeout);
+    conversationStatusTimers.delete(container);
+  }
+
   statusEl.textContent = message || '';
   statusEl.hidden = !message;
   statusEl.classList.remove('conversation__status--error', 'conversation__status--success');
@@ -178,6 +188,27 @@ function setConversationStatus(container, message, type = 'info') {
 
 function clearConversationStatus(container) {
   setConversationStatus(container, '');
+}
+
+function flashConversationStatus(container, message, type = 'info', duration = 4000) {
+  if (!container) {
+    return;
+  }
+
+  setConversationStatus(container, message, type);
+
+  if (!message) {
+    return;
+  }
+
+  const timeoutId = window.setTimeout(() => {
+    if (conversationStatusTimers.get(container) === timeoutId) {
+      conversationStatusTimers.delete(container);
+      setConversationStatus(container, '');
+    }
+  }, duration);
+
+  conversationStatusTimers.set(container, timeoutId);
 }
 
 function resetConversationForm(container) {
@@ -297,7 +328,7 @@ async function sendListingMessage(listingId, form) {
     if (textarea) {
       textarea.value = '';
     }
-    setConversationStatus(container, 'Message sent', 'success');
+    flashConversationStatus(container, 'Message sent', 'success');
   } catch (error) {
     setConversationStatus(container, error.message || 'Unable to send message.', 'error');
   } finally {
@@ -457,11 +488,13 @@ function handleConversationSubmit(event) {
   sendListingMessage(listingId, form);
 }
 
-async function fetchListings() {
+async function fetchListings(filters) {
+  const appliedFilters = filters ? { ...filters } : { ...state.activeFilters };
   showLoading();
   try {
-    const data = await apiRequest('/listings');
+    const data = await apiRequest('/listings', { params: appliedFilters });
     state.listings = Array.isArray(data) ? data : [];
+    state.activeFilters = appliedFilters;
     renderListingCollection(state.listings, elements.template, elements.listings, {
       onRender: decorateListingCard
     });
@@ -472,7 +505,22 @@ async function fetchListings() {
   }
 }
 
+function handleFilterSubmit(event) {
+  event.preventDefault();
+  if (!elements.filtersForm) {
+    return;
+  }
+
+  const formData = new FormData(elements.filtersForm);
+  const filters = Object.fromEntries(formData.entries());
+  fetchListings(filters);
+}
+
 restoreAuth();
+
+if (elements.filtersForm) {
+  elements.filtersForm.addEventListener('submit', handleFilterSubmit);
+}
 
 if (elements.listings && elements.template?.content?.firstElementChild) {
   fetchListings();
