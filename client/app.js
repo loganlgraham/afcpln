@@ -840,6 +840,10 @@ function setConversationStatus(container, message, type = 'info') {
   } else if (type === 'success') {
     statusEl.classList.add('conversation__status--success');
   }
+
+  if (message) {
+    statusEl.scrollIntoView({ block: 'nearest' });
+  }
 }
 
 function clearConversationStatus(container) {
