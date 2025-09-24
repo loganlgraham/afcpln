@@ -50,6 +50,9 @@ describe('AFCPLN API', () => {
 
     expect(agentRes.status).toBe(201);
     expect(agentRes.body.token).toBeDefined();
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    expect(sendMailMock.mock.calls[0][0].to).toBe(agentEmail);
+    expect(sendMailMock.mock.calls[0][0].subject).toContain('Welcome to the AFC Private Listing Network');
     const agentToken = agentRes.body.token;
 
     const userRes = await registerUser({
@@ -59,6 +62,13 @@ describe('AFCPLN API', () => {
     });
 
     expect(userRes.status).toBe(201);
+    expect(sendMailMock).toHaveBeenCalledTimes(2);
+    const welcomeMessages = sendMailMock.mock.calls
+      .map((call) => call[0])
+      .filter((message) =>
+        message?.subject?.includes('Welcome to the AFC Private Listing Network')
+      );
+    expect(welcomeMessages).toHaveLength(2);
     const userToken = userRes.body.token;
 
     const savedSearchRes = await request(app)

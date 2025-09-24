@@ -1,3 +1,5 @@
+import { createListingCard, formatPrice } from './listingCards.js';
+
 const API_BASE = '/api';
 
 const elements = {
@@ -430,45 +432,32 @@ function resetListingForm() {
   }
 }
 
-function formatPrice(value) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
-}
-
 function renderListings(listings) {
-  elements.listingsContainer.innerHTML = '';
-  if (!listings.length) {
-    elements.listingsContainer.innerHTML = '<div class="empty-state">No listings match the filters yet.</div>';
+  if (!elements.listingsContainer) {
     return;
   }
 
+  const container = elements.listingsContainer;
+  container.innerHTML = '';
+
+  if (!Array.isArray(listings) || !listings.length) {
+    container.innerHTML = '<div class="empty-state">No listings match the filters yet.</div>';
+    return;
+  }
+
+  if (!elements.listingTemplate) {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
   listings.forEach((listing) => {
-    const node = elements.listingTemplate.content.firstElementChild.cloneNode(true);
-    const imageWrapper = node.querySelector('.listing__image');
-    const imageEl = imageWrapper ? imageWrapper.querySelector('img') : null;
-    const firstImage = Array.isArray(listing.images) ? listing.images.find((img) => Boolean(img)) : null;
-
-    if (imageWrapper && imageEl) {
-      if (firstImage) {
-        imageEl.src = firstImage;
-        imageEl.alt = `${listing.title} photo`;
-        imageWrapper.hidden = false;
-      } else {
-        imageEl.removeAttribute('src');
-        imageWrapper.hidden = true;
-      }
+    const node = createListingCard(listing, elements.listingTemplate);
+    if (node) {
+      fragment.append(node);
     }
-
-    node.querySelector('.listing__title').textContent = listing.title;
-    node.querySelector('.listing__price').textContent = formatPrice(listing.price);
-    const meta = `${listing.bedrooms} bd • ${listing.bathrooms} ba • ${listing.area}`;
-    node.querySelector('.listing__meta').textContent = meta;
-    node.querySelector('.listing__description').textContent = listing.description;
-    const agentInfo = listing.agent
-      ? `Listed by ${listing.agent.fullName}${listing.agent.company ? ` • ${listing.agent.company}` : ''}`
-      : 'Agent information pending';
-    node.querySelector('.listing__agent').textContent = agentInfo;
-    elements.listingsContainer.append(node);
   });
+
+  container.append(fragment);
 }
 
 function renderAgentListings(listings) {

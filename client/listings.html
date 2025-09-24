@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Explore Private Listings</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="listings-page">
+    <header class="hero hero--compact">
+      <div class="hero__content">
+        <a class="hero__back-link" href="index.html">&larr; Back to the app</a>
+        <h1>Private Listings</h1>
+        <p>Explore the newest off-market opportunities shared by AFC network agents.</p>
+      </div>
+    </header>
+    <main class="container container--listings">
+      <section class="card card--listings">
+        <div class="card__heading">
+          <h2>Available Properties</h2>
+          <a class="card__link" href="index.html">Filter listings</a>
+        </div>
+        <p class="card__subtitle">Every property currently shared with the network appears below.</p>
+        <div id="public-listings" class="listing-grid" aria-live="polite">
+          <div class="empty-state">Loading listings…</div>
+        </div>
+        <p class="card__helper">Need tailored matches? <a class="card__link" href="index.html#listing-search">Return to the buyer dashboard</a>.</p>
+      </section>
+    </main>
+
+    <template id="listing-template">
+      <article class="listing">
+        <figure class="listing__image" hidden>
+          <img src="" alt="" loading="lazy" />
+        </figure>
+        <div class="listing__content">
+          <div class="listing__header">
+            <h3 class="listing__title"></h3>
+            <span class="listing__price"></span>
+          </div>
+          <p class="listing__meta"></p>
+          <p class="listing__description"></p>
+          <p class="listing__agent"></p>
+          <a class="listing__contact-link btn" href="#" hidden>Contact Listing Agent</a>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="listings-page.js"></script>
+  </body>
+</html>
