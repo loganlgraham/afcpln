@@ -5,6 +5,7 @@ const fs = require('fs');
 
 const authRoutes = require('./routes/auth');
 const listingRoutes = require('./routes/listings');
+const conversationRoutes = require('./routes/conversations');
 const userRoutes = require('./routes/users');
 
 const app = express();
@@ -21,6 +22,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingRoutes);
+app.use('/api/conversations', conversationRoutes);
 app.use('/api/users', userRoutes);
 
 const clientDir = path.resolve(__dirname, '..', '..', 'client');

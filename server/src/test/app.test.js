@@ -12,6 +12,7 @@ const nodemailer = require('nodemailer');
 const app = require('../app');
 const User = require('../models/User');
 const Listing = require('../models/Listing');
+const Conversation = require('../models/Conversation');
 const EmailLog = require('../models/EmailLog');
 
 const { sendMailMock } = nodemailer.__mock;
@@ -129,6 +130,7 @@ describe('AFCPLN API', () => {
     await User.deleteMany({});
     await Listing.deleteMany({});
     await EmailLog.deleteMany({});
+    await Conversation.deleteMany({});
 
     const agentOneRes = await registerUser({
       fullName: 'Agent One',
@@ -177,5 +179,85 @@ describe('AFCPLN API', () => {
     const message = sendMailMock.mock.calls[0][0];
     expect(message.to).toBe(email);
     expect(message.subject).toMatch(/welcome/i);
+  });
+
+  it('allows buyers and agents to exchange in-app messages about a listing', async () => {
+    await User.deleteMany({});
+    await Listing.deleteMany({});
+    await Conversation.deleteMany({});
+    await EmailLog.deleteMany({});
+
+    const agentRes = await registerUser({
+      fullName: 'Agent Author',
+      email: 'author@example.com',
+      role: 'agent'
+    });
+
+    const buyerRes = await registerUser({
+      fullName: 'Curious Buyer',
+      email: 'curious@example.com',
+      role: 'user'
+    });
+
+    const listingPayload = {
+      title: 'Skyline Loft',
+      description: 'Open layout with floor-to-ceiling windows.',
+      price: 495000,
+      bedrooms: 2,
+      bathrooms: 2,
+      area: 'North Loop',
+      address: {
+        street: '77 Riverfront Dr',
+        city: 'Minneapolis',
+        state: 'MN',
+        postalCode: '55401'
+      }
+    };
+
+    const listingRes = await request(app)
+      .post('/api/listings')
+      .set('Authorization', `Bearer ${agentRes.body.token}`)
+      .send(listingPayload);
+
+    expect(listingRes.status).toBe(201);
+    const listingId = listingRes.body._id;
+
+    const messageRes = await request(app)
+      .post('/api/conversations')
+      .set('Authorization', `Bearer ${buyerRes.body.token}`)
+      .send({ listingId, message: 'Is this loft still available?' });
+
+    expect(messageRes.status).toBe(201);
+    expect(messageRes.body.messages).toHaveLength(1);
+    expect(messageRes.body.messages[0].body).toContain('available');
+
+    const agentConversationList = await request(app)
+      .get('/api/conversations')
+      .set('Authorization', `Bearer ${agentRes.body.token}`);
+
+    expect(agentConversationList.status).toBe(200);
+    expect(agentConversationList.body).toHaveLength(1);
+    const conversationId = agentConversationList.body[0]._id;
+
+    const replyRes = await request(app)
+      .post(`/api/conversations/${conversationId}/messages`)
+      .set('Authorization', `Bearer ${agentRes.body.token}`)
+      .send({ message: 'Yes, let us know when you would like to tour.' });
+
+    expect(replyRes.status).toBe(200);
+    expect(replyRes.body.messages).toHaveLength(2);
+    expect(replyRes.body.messages[1].body).toContain('tour');
+
+    const buyerConversationList = await request(app)
+      .get('/api/conversations')
+      .query({ listingId })
+      .set('Authorization', `Bearer ${buyerRes.body.token}`);
+
+    expect(buyerConversationList.status).toBe(200);
+    expect(buyerConversationList.body).toHaveLength(1);
+    expect(buyerConversationList.body[0].messages).toHaveLength(2);
+    const participants = buyerConversationList.body[0];
+    expect(participants.agent.fullName).toBe('Agent Author');
+    expect(participants.buyer.fullName).toBe('Curious Buyer');
   });
 });

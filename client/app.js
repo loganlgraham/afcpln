@@ -1,4 +1,4 @@
-import { createListingCard, formatPrice } from './listingCards.js';
+import { renderListingCollection, formatPrice } from './listingCards.js';
 
 const API_BASE = '/api';
 
@@ -23,6 +23,7 @@ const elements = {
   listingPhotoInput: document.querySelector('#listing-form input[name="photos"]'),
   listingPhotoPreviews: document.getElementById('listing-photo-previews'),
   agentListingsContainer: document.getElementById('agent-listings'),
+  agentMessagesContainer: document.getElementById('agent-messages'),
   listingSubmitButton: document.getElementById('listing-submit'),
   listingCancelButton: document.getElementById('listing-cancel')
 };
@@ -34,7 +35,11 @@ const state = {
   savedSearches: [],
   myListings: [],
   activeFilters: {},
-  editingListingId: null
+  editingListingId: null,
+  conversationsById: {},
+  listingConversations: {},
+  agentConversations: [],
+  openConversations: new Set()
 };
 
 const LISTING_PHOTO_LIMITS = {
@@ -111,6 +116,10 @@ function handleLogout() {
   state.myListings = [];
   state.activeFilters = {};
   state.editingListingId = null;
+  state.conversationsById = {};
+  state.listingConversations = {};
+  state.agentConversations = [];
+  state.openConversations.clear();
   if (elements.listingForm) {
     resetListingForm();
   }
@@ -177,15 +186,22 @@ function updateUI() {
     fetchListings();
     if (state.user.role === 'user') {
       fetchSavedSearches();
+      if (elements.agentMessagesContainer) {
+        elements.agentMessagesContainer.innerHTML = '';
+      }
     }
     if (state.user.role === 'agent') {
       fetchMyListings();
+      fetchAgentConversations();
     }
   } else {
     elements.listingsContainer.innerHTML = '';
     elements.savedSearchList.innerHTML = '';
     if (elements.agentListingsContainer) {
       elements.agentListingsContainer.innerHTML = '';
+    }
+    if (elements.agentMessagesContainer) {
+      elements.agentMessagesContainer.innerHTML = '';
     }
   }
 }
@@ -251,6 +267,586 @@ function formatFileSize(bytes) {
 
   const kilobyte = 1024;
   return `${Math.max(1, Math.round(bytes / kilobyte))} KB`;
+}
+
+function formatTimestamp(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleString([], {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  });
+}
+
+function extractId(entity) {
+  if (!entity) {
+    return '';
+  }
+
+  if (typeof entity === 'string') {
+    return entity;
+  }
+
+  if (typeof entity === 'object') {
+    return entity._id || entity.id || '';
+  }
+
+  return '';
+}
+
+function canMessageListing(listing) {
+  if (!state.user || state.user.role !== 'user') {
+    return false;
+  }
+
+  const agentId = extractId(listing?.agent);
+  if (!agentId) {
+    return false;
+  }
+
+  return agentId !== getUserId();
+}
+
+function getConversationForListing(listingId) {
+  if (!listingId) {
+    return null;
+  }
+
+  return state.listingConversations[listingId] || null;
+}
+
+function storeConversation(conversation) {
+  if (!conversation || !conversation._id) {
+    return null;
+  }
+
+  state.conversationsById[conversation._id] = conversation;
+
+  const listingId = extractId(conversation.listing);
+  if (listingId) {
+    state.listingConversations[listingId] = conversation;
+  }
+
+  const agentIndex = state.agentConversations.findIndex((item) => item._id === conversation._id);
+  if (agentIndex !== -1) {
+    state.agentConversations[agentIndex] = conversation;
+  }
+
+  return conversation;
+}
+
+function findListingById(listingId) {
+  if (!listingId) {
+    return null;
+  }
+
+  return state.listings.find((listing) => extractId(listing) === listingId) || null;
+}
+
+function createConversationMessageElement(message, currentUserId) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'conversation__message';
+
+  const senderId = extractId(message?.sender);
+  const isCurrentUser = senderId && senderId === currentUserId;
+  if (isCurrentUser) {
+    wrapper.classList.add('conversation__message--outgoing');
+  }
+
+  const senderName = message?.sender?.fullName || '';
+  if (senderName || isCurrentUser) {
+    const senderEl = document.createElement('div');
+    senderEl.className = 'conversation__sender';
+    senderEl.textContent = isCurrentUser ? 'You' : senderName;
+    wrapper.append(senderEl);
+  }
+
+  const bodyEl = document.createElement('p');
+  bodyEl.className = 'conversation__body';
+  bodyEl.textContent = message?.body || '';
+  wrapper.append(bodyEl);
+
+  if (message?.createdAt) {
+    const metaEl = document.createElement('div');
+    metaEl.className = 'conversation__meta';
+    metaEl.textContent = formatTimestamp(message.createdAt);
+    wrapper.append(metaEl);
+  }
+
+  return wrapper;
+}
+
+function renderConversationThread(threadEl, conversation) {
+  if (!threadEl) {
+    return;
+  }
+
+  threadEl.innerHTML = '';
+  const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
+  if (!messages.length) {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  const currentUserId = getUserId();
+  messages.forEach((message) => {
+    const element = createConversationMessageElement(message, currentUserId);
+    fragment.append(element);
+  });
+
+  threadEl.append(fragment);
+  threadEl.scrollTop = threadEl.scrollHeight;
+}
+
+function renderConversation(container, conversation) {
+  if (!container) {
+    return;
+  }
+
+  const thread = container.querySelector('.conversation__thread');
+  renderConversationThread(thread, conversation);
+
+  const form = container.querySelector('.conversation__form');
+  if (form) {
+    form.dataset.conversationId = conversation?._id || '';
+  }
+}
+
+function setConversationStatus(container, message, type = 'info') {
+  if (!container) {
+    return;
+  }
+
+  const statusEl = container.querySelector('.conversation__status');
+  if (!statusEl) {
+    return;
+  }
+
+  statusEl.textContent = message || '';
+  statusEl.hidden = !message;
+  statusEl.classList.remove('conversation__status--error', 'conversation__status--success');
+
+  if (type === 'error') {
+    statusEl.classList.add('conversation__status--error');
+  } else if (type === 'success') {
+    statusEl.classList.add('conversation__status--success');
+  }
+}
+
+function clearConversationStatus(container) {
+  setConversationStatus(container, '');
+}
+
+function resetConversationForm(container) {
+  if (!container) {
+    return;
+  }
+
+  const form = container.querySelector('.conversation__form');
+  if (form) {
+    const textarea = form.querySelector('textarea[name="message"]');
+    if (textarea) {
+      textarea.value = '';
+    }
+    form.dataset.conversationId = '';
+  }
+
+  clearConversationStatus(container);
+}
+
+async function loadConversationForListing(listingId, container) {
+  if (!listingId) {
+    return null;
+  }
+
+  const existing = getConversationForListing(listingId);
+  if (existing) {
+    renderConversation(container, existing);
+    return existing;
+  }
+
+  try {
+    setConversationStatus(container, 'Loading messages…');
+    const response = await apiRequest('/conversations', { params: { listingId } });
+    const conversation = Array.isArray(response) && response.length ? storeConversation(response[0]) : null;
+    renderConversation(container, conversation);
+    clearConversationStatus(container);
+    return conversation;
+  } catch (error) {
+    setConversationStatus(container, error.message || 'Unable to load messages.', 'error');
+    throw error;
+  }
+}
+
+function decorateListingCard(node, listing) {
+  if (!node) {
+    return;
+  }
+
+  const listingId = extractId(listing);
+  const contactButton = node.querySelector('.listing__contact-link');
+  const conversationContainer = node.querySelector('.listing__conversation');
+  const canContact = canMessageListing(listing);
+
+  if (contactButton) {
+    contactButton.hidden = !canContact;
+    contactButton.dataset.listingId = listingId;
+  }
+
+  if (!conversationContainer) {
+    return;
+  }
+
+  conversationContainer.dataset.listingId = listingId;
+  const form = conversationContainer.querySelector('.conversation__form');
+  if (form) {
+    form.dataset.listingId = listingId;
+  }
+
+  if (!canContact) {
+    conversationContainer.hidden = true;
+    resetConversationForm(conversationContainer);
+    return;
+  }
+
+  if (state.openConversations.has(listingId)) {
+    conversationContainer.hidden = false;
+    const conversation = getConversationForListing(listingId);
+    renderConversation(conversationContainer, conversation);
+  } else {
+    conversationContainer.hidden = true;
+    resetConversationForm(conversationContainer);
+  }
+}
+
+async function openListingConversation(listingId, card) {
+  if (!listingId || !card) {
+    return;
+  }
+
+  const listing = findListingById(listingId);
+  if (!canMessageListing(listing)) {
+    return;
+  }
+
+  const conversationContainer = card.querySelector('.listing__conversation');
+  if (!conversationContainer) {
+    return;
+  }
+
+  state.openConversations.add(listingId);
+  conversationContainer.hidden = false;
+  const form = conversationContainer.querySelector('.conversation__form');
+  if (form) {
+    form.dataset.listingId = listingId;
+  }
+
+  const existing = getConversationForListing(listingId);
+  renderConversation(conversationContainer, existing);
+  clearConversationStatus(conversationContainer);
+
+  try {
+    await loadConversationForListing(listingId, conversationContainer);
+  } catch (error) {
+    // error handled in loadConversationForListing
+  }
+
+  const textarea = conversationContainer.querySelector('textarea[name="message"]');
+  if (textarea) {
+    textarea.focus();
+  }
+}
+
+function closeListingConversation(listingId, card) {
+  if (!listingId || !card) {
+    return;
+  }
+
+  const conversationContainer = card.querySelector('.listing__conversation');
+  if (!conversationContainer) {
+    return;
+  }
+
+  conversationContainer.hidden = true;
+  resetConversationForm(conversationContainer);
+  state.openConversations.delete(listingId);
+}
+
+async function sendListingMessage(listingId, form) {
+  if (!listingId || !form) {
+    return;
+  }
+
+  const container = form.closest('.listing__conversation');
+  if (!container) {
+    return;
+  }
+
+  const textarea = form.querySelector('textarea[name="message"]');
+  const message = textarea?.value?.trim();
+  if (!message) {
+    setConversationStatus(container, 'Please enter a message.', 'error');
+    return;
+  }
+
+  const sendButton = form.querySelector('button[type="submit"]');
+  const conversationId = form.dataset.conversationId;
+
+  try {
+    if (sendButton) {
+      sendButton.disabled = true;
+    }
+    setConversationStatus(container, 'Sending…');
+    const payload = conversationId
+      ? await apiRequest(`/conversations/${conversationId}/messages`, { method: 'POST', body: { message } })
+      : await apiRequest('/conversations', { method: 'POST', body: { listingId, message } });
+
+    const conversation = storeConversation(payload) || payload;
+    renderConversation(container, conversation);
+    if (textarea) {
+      textarea.value = '';
+    }
+    setConversationStatus(container, 'Message sent', 'success');
+  } catch (error) {
+    setConversationStatus(container, error.message || 'Unable to send message.', 'error');
+  } finally {
+    if (sendButton) {
+      sendButton.disabled = false;
+    }
+  }
+}
+
+function handleListingCardClick(event) {
+  if (!elements.listingsContainer) {
+    return;
+  }
+
+  const contactButton = event.target.closest('.listing__contact-link');
+  if (contactButton && elements.listingsContainer.contains(contactButton)) {
+    event.preventDefault();
+    const listingId = contactButton.dataset.listingId;
+    const card = contactButton.closest('.listing');
+    if (listingId && card) {
+      openListingConversation(listingId, card);
+    }
+    return;
+  }
+
+  const closeButton = event.target.closest('[data-conversation-close]');
+  if (closeButton && elements.listingsContainer.contains(closeButton)) {
+    event.preventDefault();
+    const container = closeButton.closest('.listing__conversation');
+    const listingId = container?.dataset.listingId;
+    const card = closeButton.closest('.listing');
+    if (listingId && card) {
+      closeListingConversation(listingId, card);
+    }
+  }
+}
+
+function handleListingConversationSubmit(event) {
+  if (!elements.listingsContainer) {
+    return;
+  }
+
+  const form = event.target.closest('.conversation__form');
+  if (!form || !elements.listingsContainer.contains(form)) {
+    return;
+  }
+
+  event.preventDefault();
+  const listingId = form.dataset.listingId;
+  if (!listingId) {
+    return;
+  }
+
+  sendListingMessage(listingId, form);
+}
+
+function renderAgentConversations() {
+  if (!elements.agentMessagesContainer) {
+    return;
+  }
+
+  const container = elements.agentMessagesContainer;
+  container.innerHTML = '';
+
+  if (!state.user || state.user.role !== 'agent') {
+    return;
+  }
+
+  if (!state.agentConversations.length) {
+    container.innerHTML =
+      '<div class="empty-state">Messages from interested buyers will appear here once conversations begin.</div>';
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  state.agentConversations.forEach((conversation) => {
+    const card = document.createElement('article');
+    card.className = 'conversation-card';
+    card.dataset.conversationId = conversation._id;
+    const listingId = extractId(conversation.listing);
+    if (listingId) {
+      card.dataset.listingId = listingId;
+    }
+
+    const header = document.createElement('div');
+    header.className = 'conversation-card__header';
+
+    const title = document.createElement('h4');
+    title.className = 'conversation-card__title';
+    title.textContent = conversation.listing?.title || 'Listing Conversation';
+
+    const subtitle = document.createElement('p');
+    subtitle.className = 'conversation-card__subtitle';
+    const subtitleParts = [];
+    if (conversation.buyer?.fullName) {
+      subtitleParts.push(`Buyer: ${conversation.buyer.fullName}`);
+    }
+    const locationParts = [];
+    if (conversation.listing?.area) {
+      locationParts.push(conversation.listing.area);
+    }
+    if (conversation.listing?.address?.city) {
+      locationParts.push(conversation.listing.address.city);
+    }
+    if (locationParts.length) {
+      subtitleParts.push(locationParts.join(', '));
+    }
+    subtitle.textContent = subtitleParts.join(' • ');
+
+    header.append(title, subtitle);
+    card.append(header);
+
+    const thread = document.createElement('div');
+    thread.className = 'conversation__thread';
+    card.append(thread);
+    renderConversationThread(thread, conversation);
+
+    const form = document.createElement('form');
+    form.className = 'conversation__form';
+    form.dataset.conversationId = conversation._id;
+    form.dataset.listingId = listingId;
+
+    const textarea = document.createElement('textarea');
+    textarea.name = 'message';
+    textarea.rows = 3;
+    textarea.required = true;
+    textarea.placeholder = 'Share an update or answer their question.';
+    form.append(textarea);
+
+    const actions = document.createElement('div');
+    actions.className = 'conversation__actions';
+    const sendButton = document.createElement('button');
+    sendButton.type = 'submit';
+    sendButton.className = 'btn btn--small primary';
+    sendButton.textContent = 'Send Reply';
+    actions.append(sendButton);
+    form.append(actions);
+    card.append(form);
+
+    const status = document.createElement('p');
+    status.className = 'conversation__status';
+    status.hidden = true;
+    status.setAttribute('role', 'status');
+    card.append(status);
+
+    fragment.append(card);
+  });
+
+  container.append(fragment);
+}
+
+async function fetchAgentConversations() {
+  if (!state.user || state.user.role !== 'agent') {
+    state.agentConversations = [];
+    if (elements.agentMessagesContainer) {
+      elements.agentMessagesContainer.innerHTML = '';
+    }
+    return;
+  }
+
+  try {
+    const conversations = await apiRequest('/conversations');
+    state.agentConversations = Array.isArray(conversations) ? conversations : [];
+    state.agentConversations.forEach((conversation) => {
+      storeConversation(conversation);
+    });
+    renderAgentConversations();
+  } catch (error) {
+    if (elements.agentMessagesContainer) {
+      elements.agentMessagesContainer.innerHTML = `<div class="empty-state">${error.message}</div>`;
+    }
+  }
+}
+
+async function sendAgentConversationMessage(form) {
+  const container = form.closest('.conversation-card');
+  if (!container) {
+    return;
+  }
+
+  const textarea = form.querySelector('textarea[name="message"]');
+  const message = textarea?.value?.trim();
+  if (!message) {
+    setConversationStatus(container, 'Please enter a message.', 'error');
+    return;
+  }
+
+  const conversationId = form.dataset.conversationId;
+  if (!conversationId) {
+    setConversationStatus(container, 'Conversation not found.', 'error');
+    return;
+  }
+
+  const sendButton = form.querySelector('button[type="submit"]');
+
+  try {
+    if (sendButton) {
+      sendButton.disabled = true;
+    }
+    setConversationStatus(container, 'Sending…');
+    const payload = await apiRequest(`/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: { message }
+    });
+    const conversation = storeConversation(payload) || payload;
+    const thread = container.querySelector('.conversation__thread');
+    renderConversationThread(thread, conversation);
+    if (textarea) {
+      textarea.value = '';
+    }
+    setConversationStatus(container, 'Reply sent', 'success');
+  } catch (error) {
+    setConversationStatus(container, error.message || 'Unable to send message.', 'error');
+  } finally {
+    if (sendButton) {
+      sendButton.disabled = false;
+    }
+  }
+}
+
+function handleAgentConversationSubmit(event) {
+  if (!elements.agentMessagesContainer) {
+    return;
+  }
+
+  const form = event.target.closest('.conversation__form');
+  if (!form || !elements.agentMessagesContainer.contains(form)) {
+    return;
+  }
+
+  event.preventDefault();
+  sendAgentConversationMessage(form);
 }
 
 function validateListingPhotos(photoFiles) {
@@ -433,31 +1029,13 @@ function resetListingForm() {
 }
 
 function renderListings(listings) {
-  if (!elements.listingsContainer) {
+  if (!elements.listingsContainer || !elements.listingTemplate) {
     return;
   }
 
-  const container = elements.listingsContainer;
-  container.innerHTML = '';
-
-  if (!Array.isArray(listings) || !listings.length) {
-    container.innerHTML = '<div class="empty-state">No listings match the filters yet.</div>';
-    return;
-  }
-
-  if (!elements.listingTemplate) {
-    return;
-  }
-
-  const fragment = document.createDocumentFragment();
-  listings.forEach((listing) => {
-    const node = createListingCard(listing, elements.listingTemplate);
-    if (node) {
-      fragment.append(node);
-    }
+  renderListingCollection(listings, elements.listingTemplate, elements.listingsContainer, {
+    onRender: decorateListingCard
   });
-
-  container.append(fragment);
 }
 
 function renderAgentListings(listings) {
@@ -963,6 +1541,15 @@ function bootstrap() {
 
   if (elements.agentListingsContainer) {
     elements.agentListingsContainer.addEventListener('click', handleAgentListingsClick);
+  }
+
+  if (elements.listingsContainer) {
+    elements.listingsContainer.addEventListener('click', handleListingCardClick);
+    elements.listingsContainer.addEventListener('submit', handleListingConversationSubmit);
+  }
+
+  if (elements.agentMessagesContainer) {
+    elements.agentMessagesContainer.addEventListener('submit', handleAgentConversationSubmit);
   }
 }
 

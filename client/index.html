@@ -191,6 +191,13 @@
           </p>
           <div id="agent-listings" class="listing-grid listing-grid--manage" aria-live="polite"></div>
         </div>
+        <div class="form-section" id="agent-messages-section">
+          <h3>Buyer Messages</h3>
+          <p class="form-section__description">
+            Continue conversations with prospective buyers directly from your listing dashboard.
+          </p>
+          <div id="agent-messages" class="conversation-list" aria-live="polite"></div>
+        </div>
       </section>
 
       <section class="card" id="saved-searches" hidden>
@@ -249,7 +256,29 @@
           <p class="listing__meta"></p>
           <p class="listing__description"></p>
           <p class="listing__agent"></p>
-          <a class="listing__contact-link btn" href="#" hidden>Contact Listing Agent</a>
+          <div class="listing__contact">
+            <button type="button" class="listing__contact-link btn" hidden>Message Listing Agent</button>
+            <div class="listing__conversation" hidden>
+              <header class="conversation__header">
+                <h4 class="conversation__title">Message <span data-recipient></span></h4>
+              </header>
+              <div class="conversation__thread" aria-live="polite"></div>
+              <form class="conversation__form" data-listing-id="">
+                <textarea
+                  name="message"
+                  rows="3"
+                  aria-label="Message"
+                  placeholder="Ask a question or request a tour."
+                  required
+                ></textarea>
+                <div class="conversation__actions">
+                  <button type="submit" class="btn btn--small primary">Send Message</button>
+                  <button type="button" class="btn btn--small" data-conversation-close>Close</button>
+                </div>
+              </form>
+              <p class="conversation__status" role="status" hidden></p>
+            </div>
+          </div>
         </div>
       </article>
     </template>

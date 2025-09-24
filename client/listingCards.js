@@ -62,47 +62,6 @@ function buildAgentLine(listing) {
   return details.length ? `Listed by ${details.join(' • ')}` : 'Agent information pending';
 }
 
-export function createAgentMailto(listing) {
-  const email = listing?.agent?.email ? String(listing.agent.email).trim() : '';
-  if (!email) {
-    return null;
-  }
-
-  const title = listing?.title ? String(listing.title).trim() : 'your listing';
-  const locationParts = [];
-  if (listing?.area) {
-    locationParts.push(String(listing.area).trim());
-  }
-  if (listing?.address?.city) {
-    locationParts.push(String(listing.address.city).trim());
-  }
-  if (listing?.address?.state) {
-    locationParts.push(String(listing.address.state).trim());
-  }
-  const location = locationParts.filter(Boolean).join(', ');
-  const interestLabel = location ? `${title} in ${location}` : title;
-
-  const fullName = listing?.agent?.fullName ? String(listing.agent.fullName).trim() : '';
-  const firstName = fullName.split(/\s+/)[0] || '';
-  const greeting = firstName ? `Hi ${firstName},` : 'Hello,';
-
-  const bodyLines = [
-    greeting,
-    '',
-    `I'm interested in ${interestLabel}.`,
-    'Could we schedule a tour or discuss the property in more detail?',
-    '',
-    'Thanks!'
-  ];
-
-  const params = new URLSearchParams({
-    subject: `Inquiry about ${title}`,
-    body: bodyLines.join('\n')
-  });
-
-  return `mailto:${email}?${params.toString()}`;
-}
-
 export function createListingCard(listing, template) {
   if (!template || !template.content || !template.content.firstElementChild) {
     return null;
@@ -151,21 +110,37 @@ export function createListingCard(listing, template) {
 
   const contactLink = node.querySelector('.listing__contact-link');
   if (contactLink) {
-    const mailto = createAgentMailto(listing);
-    if (mailto) {
-      contactLink.href = mailto;
-      contactLink.hidden = false;
-      const agentName = listing?.agent?.fullName || 'the listing agent';
-      contactLink.setAttribute('aria-label', `Email ${agentName}`);
-    } else {
-      contactLink.hidden = true;
+    const agentName = listing?.agent?.fullName || 'the listing agent';
+    contactLink.hidden = !listing?.agent;
+    contactLink.dataset.listingId = listing?._id || '';
+    contactLink.dataset.agentId = listing?.agent?._id || '';
+    contactLink.setAttribute('aria-label', `Message ${agentName}`);
+  }
+
+  if (node) {
+    node.dataset.listingId = listing?._id || '';
+    node.dataset.agentId = listing?.agent?._id || '';
+  }
+
+  const conversation = node.querySelector('.listing__conversation');
+  if (conversation) {
+    conversation.dataset.listingId = listing?._id || '';
+    conversation.dataset.agentId = listing?.agent?._id || '';
+    const recipient = conversation.querySelector('[data-recipient]');
+    if (recipient) {
+      recipient.textContent = listing?.agent?.fullName || 'the listing agent';
+    }
+    const status = conversation.querySelector('.conversation__status');
+    if (status) {
+      status.textContent = '';
+      status.hidden = true;
     }
   }
 
   return node;
 }
 
-export function renderListingCollection(listings, template, container) {
+export function renderListingCollection(listings, template, container, options = {}) {
   if (!container) {
     return;
   }
@@ -181,6 +156,9 @@ export function renderListingCollection(listings, template, container) {
   listings.forEach((listing) => {
     const node = createListingCard(listing, template);
     if (node) {
+      if (typeof options.onRender === 'function') {
+        options.onRender(node, listing);
+      }
       fragment.append(node);
     }
   });
