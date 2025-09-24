@@ -241,6 +241,14 @@
         </form>
         <div id="saved-search-list" class="saved-search-list" aria-live="polite"></div>
       </section>
+
+      <section class="card" id="buyer-messages" hidden>
+        <h2>Your Conversations</h2>
+        <p class="card__intro">
+          Messages with listing agents will appear here after you reach out about a property.
+        </p>
+        <div id="buyer-messages-list" class="conversation-list conversation-list--summary" aria-live="polite"></div>
+      </section>
     </main>
 
     <template id="listing-template">
@@ -258,26 +266,6 @@
           <p class="listing__agent"></p>
           <div class="listing__contact">
             <button type="button" class="listing__contact-link btn" hidden>Message Listing Agent</button>
-            <div class="listing__conversation" hidden>
-              <header class="conversation__header">
-                <h4 class="conversation__title">Message <span data-recipient></span></h4>
-              </header>
-              <div class="conversation__thread" aria-live="polite"></div>
-              <form class="conversation__form" data-listing-id="">
-                <textarea
-                  name="message"
-                  rows="3"
-                  aria-label="Message"
-                  placeholder="Ask a question or request a tour."
-                  required
-                ></textarea>
-                <div class="conversation__actions">
-                  <button type="submit" class="btn btn--small primary">Send Message</button>
-                  <button type="button" class="btn btn--small" data-conversation-close>Close</button>
-                </div>
-              </form>
-              <p class="conversation__status" role="status" hidden></p>
-            </div>
           </div>
         </div>
       </article>
@@ -310,6 +298,37 @@
         </div>
       </article>
     </template>
+
+    <div id="conversation-modal" class="conversation-modal" hidden>
+      <div class="conversation-modal__backdrop" data-conversation-dismiss></div>
+      <div class="conversation-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="conversation-modal-title">
+        <header class="conversation__header">
+          <div>
+            <h4 class="conversation__title" id="conversation-modal-title">Message <span data-recipient></span></h4>
+            <p class="conversation__subtitle" data-listing-title></p>
+          </div>
+          <button type="button" class="conversation-modal__close" data-conversation-close aria-label="Close message window">
+            ×
+          </button>
+        </header>
+        <div class="conversation__thread" aria-live="polite"></div>
+        <form class="conversation__form" data-listing-id="">
+          <label class="conversation__label" for="conversation-modal-message">Message</label>
+          <textarea
+            id="conversation-modal-message"
+            name="message"
+            rows="4"
+            placeholder="Ask a question or request a tour."
+            required
+          ></textarea>
+          <div class="conversation__actions">
+            <button type="submit" class="btn btn--small primary">Send Message</button>
+            <button type="button" class="btn btn--small" data-conversation-close>Close</button>
+          </div>
+        </form>
+        <p class="conversation__status" role="status" hidden></p>
+      </div>
+    </div>
 
     <script src="app.js" type="module"></script>
   </body>

@@ -24,6 +24,10 @@ const elements = {
   listingPhotoPreviews: document.getElementById('listing-photo-previews'),
   agentListingsContainer: document.getElementById('agent-listings'),
   agentMessagesContainer: document.getElementById('agent-messages'),
+  buyerMessagesSection: document.getElementById('buyer-messages'),
+  buyerMessagesContainer: document.getElementById('buyer-messages-list'),
+  conversationModal: document.getElementById('conversation-modal'),
+  conversationModalDialog: document.querySelector('#conversation-modal .conversation-modal__dialog'),
   listingSubmitButton: document.getElementById('listing-submit'),
   listingCancelButton: document.getElementById('listing-cancel')
 };
@@ -39,7 +43,7 @@ const state = {
   conversationsById: {},
   listingConversations: {},
   agentConversations: [],
-  openConversations: new Set()
+  buyerConversations: []
 };
 
 const LISTING_PHOTO_LIMITS = {
@@ -119,10 +123,11 @@ function handleLogout() {
   state.conversationsById = {};
   state.listingConversations = {};
   state.agentConversations = [];
-  state.openConversations.clear();
+  state.buyerConversations = [];
   if (elements.listingForm) {
     resetListingForm();
   }
+  closeConversationModal();
   saveAuthState();
   clearAuthForms();
   setActiveTab('login');
@@ -177,6 +182,9 @@ function toggleSections() {
   elements.listingSearchSection.hidden = !isAuthenticated;
   elements.agentToolsSection.hidden = !isAuthenticated || state.user.role !== 'agent';
   elements.savedSearchesSection.hidden = !isAuthenticated || state.user.role !== 'user';
+  if (elements.buyerMessagesSection) {
+    elements.buyerMessagesSection.hidden = !isAuthenticated || state.user.role !== 'user';
+  }
 }
 
 function updateUI() {
@@ -186,6 +194,7 @@ function updateUI() {
     fetchListings();
     if (state.user.role === 'user') {
       fetchSavedSearches();
+      fetchBuyerConversations();
       if (elements.agentMessagesContainer) {
         elements.agentMessagesContainer.innerHTML = '';
       }
@@ -193,6 +202,9 @@ function updateUI() {
     if (state.user.role === 'agent') {
       fetchMyListings();
       fetchAgentConversations();
+      if (elements.buyerMessagesContainer) {
+        elements.buyerMessagesContainer.innerHTML = '';
+      }
     }
   } else {
     elements.listingsContainer.innerHTML = '';
@@ -202,6 +214,9 @@ function updateUI() {
     }
     if (elements.agentMessagesContainer) {
       elements.agentMessagesContainer.innerHTML = '';
+    }
+    if (elements.buyerMessagesContainer) {
+      elements.buyerMessagesContainer.innerHTML = '';
     }
   }
 }
@@ -334,12 +349,49 @@ function storeConversation(conversation) {
     state.listingConversations[listingId] = conversation;
   }
 
-  const agentIndex = state.agentConversations.findIndex((item) => item._id === conversation._id);
-  if (agentIndex !== -1) {
-    state.agentConversations[agentIndex] = conversation;
+  return conversation;
+}
+
+function getConversationSortValue(conversation) {
+  if (!conversation) {
+    return 0;
   }
 
-  return conversation;
+  const timestamp = conversation.lastMessageAt || conversation.updatedAt || conversation.createdAt;
+  return timestamp ? new Date(timestamp).getTime() : 0;
+}
+
+function sortConversations(list) {
+  return list.sort((a, b) => getConversationSortValue(b) - getConversationSortValue(a));
+}
+
+function upsertConversation(list, conversation) {
+  if (!Array.isArray(list) || !conversation || !conversation._id) {
+    return list;
+  }
+
+  const existingIndex = list.findIndex((item) => item._id === conversation._id);
+  if (existingIndex === -1) {
+    list.push(conversation);
+  } else {
+    list[existingIndex] = conversation;
+  }
+
+  return sortConversations(list);
+}
+
+function handleConversationUpdate(conversation) {
+  if (!conversation) {
+    return;
+  }
+
+  if (state.user?.role === 'agent') {
+    upsertConversation(state.agentConversations, conversation);
+    renderAgentConversations();
+  } else if (state.user?.role === 'user') {
+    upsertConversation(state.buyerConversations, conversation);
+    renderBuyerConversations();
+  }
 }
 
 function findListingById(listingId) {
@@ -476,6 +528,7 @@ async function loadConversationForListing(listingId, container) {
     setConversationStatus(container, 'Loading messages…');
     const response = await apiRequest('/conversations', { params: { listingId } });
     const conversation = Array.isArray(response) && response.length ? storeConversation(response[0]) : null;
+    handleConversationUpdate(conversation);
     renderConversation(container, conversation);
     clearConversationStatus(container);
     return conversation;
@@ -492,99 +545,159 @@ function decorateListingCard(node, listing) {
 
   const listingId = extractId(listing);
   const contactButton = node.querySelector('.listing__contact-link');
-  const conversationContainer = node.querySelector('.listing__conversation');
   const canContact = canMessageListing(listing);
 
   if (contactButton) {
     contactButton.hidden = !canContact;
-    contactButton.dataset.listingId = listingId;
-  }
-
-  if (!conversationContainer) {
-    return;
-  }
-
-  conversationContainer.dataset.listingId = listingId;
-  const form = conversationContainer.querySelector('.conversation__form');
-  if (form) {
-    form.dataset.listingId = listingId;
-  }
-
-  if (!canContact) {
-    conversationContainer.hidden = true;
-    resetConversationForm(conversationContainer);
-    return;
-  }
-
-  if (state.openConversations.has(listingId)) {
-    conversationContainer.hidden = false;
-    const conversation = getConversationForListing(listingId);
-    renderConversation(conversationContainer, conversation);
-  } else {
-    conversationContainer.hidden = true;
-    resetConversationForm(conversationContainer);
+    contactButton.dataset.listingId = listingId || '';
+    if (listing?.title) {
+      contactButton.dataset.listingTitle = listing.title;
+    } else {
+      delete contactButton.dataset.listingTitle;
+    }
+    if (listing?.agent?.fullName) {
+      contactButton.dataset.agentName = listing.agent.fullName;
+    } else {
+      delete contactButton.dataset.agentName;
+    }
   }
 }
 
-async function openListingConversation(listingId, card) {
-  if (!listingId || !card) {
+async function openConversationModal({ listingId, listing = null, conversation = null } = {}) {
+  if (!elements.conversationModal || !elements.conversationModalDialog || !listingId) {
     return;
   }
 
-  const listing = findListingById(listingId);
-  if (!canMessageListing(listing)) {
-    return;
+  const modal = elements.conversationModal;
+  const container = elements.conversationModalDialog;
+  const form = container.querySelector('.conversation__form');
+  const recipient = container.querySelector('[data-recipient]');
+  const listingTitleEl = container.querySelector('[data-listing-title]');
+
+  const resolvedListing = listing || findListingById(listingId) || conversation?.listing || null;
+  const resolvedConversation = conversation ? storeConversation(conversation) : getConversationForListing(listingId);
+  if (conversation) {
+    handleConversationUpdate(conversation);
   }
 
-  const conversationContainer = card.querySelector('.listing__conversation');
-  if (!conversationContainer) {
-    return;
+  const agentInfo = conversation?.agent || resolvedListing?.agent || null;
+  const agentName = agentInfo?.fullName || 'the listing agent';
+
+  if (recipient) {
+    recipient.textContent = agentName;
   }
 
-  state.openConversations.add(listingId);
-  conversationContainer.hidden = false;
-  const form = conversationContainer.querySelector('.conversation__form');
+  const listingTitle = resolvedListing?.title || conversation?.listing?.title || '';
+  if (listingTitleEl) {
+    listingTitleEl.textContent = listingTitle ? `Regarding ${listingTitle}` : '';
+    listingTitleEl.hidden = !listingTitle;
+  }
+
   if (form) {
     form.dataset.listingId = listingId;
+    form.dataset.conversationId = resolvedConversation?._id || '';
   }
 
-  const existing = getConversationForListing(listingId);
-  renderConversation(conversationContainer, existing);
-  clearConversationStatus(conversationContainer);
+  container.dataset.listingId = listingId;
+  modal.dataset.listingId = listingId;
+  modal.dataset.conversationId = resolvedConversation?._id || '';
 
-  try {
-    await loadConversationForListing(listingId, conversationContainer);
-  } catch (error) {
-    // error handled in loadConversationForListing
-  }
+  renderConversation(container, resolvedConversation);
+  clearConversationStatus(container);
 
-  const textarea = conversationContainer.querySelector('textarea[name="message"]');
+  modal.hidden = false;
+  modal.classList.add('conversation-modal--open');
+  document.body.classList.add('conversation-modal-open');
+
+  const textarea = container.querySelector('textarea[name="message"]');
   if (textarea) {
     textarea.focus();
   }
+
+  try {
+    const loaded = await loadConversationForListing(listingId, container);
+    if (loaded && form) {
+      form.dataset.conversationId = loaded._id || '';
+      modal.dataset.conversationId = loaded._id || '';
+    }
+  } catch (error) {
+    // handled within loadConversationForListing
+  }
 }
 
-function closeListingConversation(listingId, card) {
-  if (!listingId || !card) {
+function closeConversationModal() {
+  if (!elements.conversationModal || !elements.conversationModalDialog) {
     return;
   }
 
-  const conversationContainer = card.querySelector('.listing__conversation');
-  if (!conversationContainer) {
+  const modal = elements.conversationModal;
+  const container = elements.conversationModalDialog;
+  modal.classList.remove('conversation-modal--open');
+  modal.hidden = true;
+  document.body.classList.remove('conversation-modal-open');
+  delete modal.dataset.listingId;
+  delete modal.dataset.conversationId;
+  delete container.dataset.listingId;
+  resetConversationForm(container);
+}
+
+function isConversationModalOpen() {
+  return Boolean(elements.conversationModal && !elements.conversationModal.hidden);
+}
+
+function handleConversationModalClick(event) {
+  if (!elements.conversationModal) {
     return;
   }
 
-  conversationContainer.hidden = true;
-  resetConversationForm(conversationContainer);
-  state.openConversations.delete(listingId);
+  const dismissTrigger = event.target.closest('[data-conversation-close],[data-conversation-dismiss]');
+  if (!dismissTrigger || !elements.conversationModal.contains(dismissTrigger)) {
+    return;
+  }
+
+  event.preventDefault();
+  closeConversationModal();
 }
 
-async function sendListingMessage(listingId, form) {
+function handleConversationModalSubmit(event) {
+  if (!elements.conversationModal) {
+    return;
+  }
+
+  const form = event.target.closest('.conversation__form');
+  if (!form || !elements.conversationModal.contains(form)) {
+    return;
+  }
+
+  event.preventDefault();
+  const listingId = form.dataset.listingId;
+  if (!listingId) {
+    return;
+  }
+
+  sendListingMessage(listingId, form, elements.conversationModalDialog);
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key !== 'Escape') {
+    return;
+  }
+
+  if (!isConversationModalOpen()) {
+    return;
+  }
+
+  event.preventDefault();
+  closeConversationModal();
+}
+
+async function sendListingMessage(listingId, form, containerOverride = null) {
   if (!listingId || !form) {
     return;
   }
 
-  const container = form.closest('.listing__conversation');
+  const container =
+    containerOverride || form.closest('.conversation-modal__dialog, .listing__conversation');
   if (!container) {
     return;
   }
@@ -610,6 +723,10 @@ async function sendListingMessage(listingId, form) {
 
     const conversation = storeConversation(payload) || payload;
     renderConversation(container, conversation);
+    handleConversationUpdate(conversation);
+    if (elements.conversationModal && container === elements.conversationModalDialog) {
+      elements.conversationModal.dataset.conversationId = conversation._id || '';
+    }
     if (textarea) {
       textarea.value = '';
     }
@@ -629,45 +746,23 @@ function handleListingCardClick(event) {
   }
 
   const contactButton = event.target.closest('.listing__contact-link');
-  if (contactButton && elements.listingsContainer.contains(contactButton)) {
-    event.preventDefault();
-    const listingId = contactButton.dataset.listingId;
-    const card = contactButton.closest('.listing');
-    if (listingId && card) {
-      openListingConversation(listingId, card);
-    }
-    return;
-  }
-
-  const closeButton = event.target.closest('[data-conversation-close]');
-  if (closeButton && elements.listingsContainer.contains(closeButton)) {
-    event.preventDefault();
-    const container = closeButton.closest('.listing__conversation');
-    const listingId = container?.dataset.listingId;
-    const card = closeButton.closest('.listing');
-    if (listingId && card) {
-      closeListingConversation(listingId, card);
-    }
-  }
-}
-
-function handleListingConversationSubmit(event) {
-  if (!elements.listingsContainer) {
-    return;
-  }
-
-  const form = event.target.closest('.conversation__form');
-  if (!form || !elements.listingsContainer.contains(form)) {
+  if (!contactButton || !elements.listingsContainer.contains(contactButton)) {
     return;
   }
 
   event.preventDefault();
-  const listingId = form.dataset.listingId;
+  const listingId = contactButton.dataset.listingId;
   if (!listingId) {
     return;
   }
 
-  sendListingMessage(listingId, form);
+  const listing = findListingById(listingId);
+  const conversation = getConversationForListing(listingId);
+  if (!canMessageListing(listing) && !conversation) {
+    return;
+  }
+
+  openConversationModal({ listingId, listing, conversation });
 }
 
 function renderAgentConversations() {
@@ -681,6 +776,8 @@ function renderAgentConversations() {
   if (!state.user || state.user.role !== 'agent') {
     return;
   }
+
+  sortConversations(state.agentConversations);
 
   if (!state.agentConversations.length) {
     container.innerHTML =
@@ -766,6 +863,148 @@ function renderAgentConversations() {
   container.append(fragment);
 }
 
+function renderBuyerConversations() {
+  if (!elements.buyerMessagesContainer) {
+    return;
+  }
+
+  const container = elements.buyerMessagesContainer;
+  container.innerHTML = '';
+
+  if (!state.user || state.user.role !== 'user') {
+    return;
+  }
+
+  sortConversations(state.buyerConversations);
+
+  if (!state.buyerConversations.length) {
+    container.innerHTML =
+      '<div class="empty-state">Reach out to a listing agent to start a conversation.</div>';
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  state.buyerConversations.forEach((conversation) => {
+    const card = document.createElement('article');
+    card.className = 'conversation-summary';
+    card.dataset.conversationId = conversation._id;
+    const listingId = extractId(conversation.listing);
+    if (listingId) {
+      card.dataset.listingId = listingId;
+    }
+
+    const header = document.createElement('div');
+    header.className = 'conversation-summary__header';
+
+    const title = document.createElement('h4');
+    title.className = 'conversation-summary__title';
+    title.textContent = conversation.listing?.title || 'Listing Conversation';
+    header.append(title);
+
+    const timeValue = conversation.lastMessageAt || conversation.updatedAt || conversation.createdAt;
+    if (timeValue) {
+      const timeEl = document.createElement('span');
+      timeEl.className = 'conversation-summary__time';
+      timeEl.textContent = formatTimestamp(timeValue);
+      header.append(timeEl);
+    }
+
+    const meta = document.createElement('p');
+    meta.className = 'conversation-summary__meta';
+    const metaParts = [];
+
+    if (conversation.agent?.fullName) {
+      metaParts.push(`Agent: ${conversation.agent.fullName}`);
+    }
+
+    const locationParts = [];
+    if (conversation.listing?.area) {
+      locationParts.push(conversation.listing.area);
+    }
+
+    const cityState = [conversation.listing?.address?.city, conversation.listing?.address?.state]
+      .filter(Boolean)
+      .join(', ');
+    if (cityState) {
+      locationParts.push(cityState);
+    }
+
+    if (locationParts.length) {
+      metaParts.push(locationParts.join(' • '));
+    }
+
+    if (metaParts.length) {
+      meta.textContent = metaParts.join(' • ');
+      card.append(header, meta);
+    } else {
+      card.append(header);
+    }
+
+    const lastMessage =
+      Array.isArray(conversation.messages) && conversation.messages.length
+        ? conversation.messages[conversation.messages.length - 1]
+        : null;
+
+    const preview = document.createElement('p');
+    preview.className = 'conversation-summary__preview';
+    if (lastMessage) {
+      const senderId = extractId(lastMessage.sender);
+      const senderLabel = senderId && senderId === getUserId()
+        ? 'You'
+        : lastMessage.sender?.fullName || 'Agent';
+      const body = lastMessage.body || '';
+      const snippet = body.length > 160 ? `${body.slice(0, 157)}…` : body;
+      preview.textContent = `${senderLabel}: ${snippet}`;
+    } else {
+      preview.textContent = 'No messages yet. Send a note to get the conversation started.';
+    }
+    card.append(preview);
+
+    const actions = document.createElement('div');
+    actions.className = 'conversation-summary__actions';
+    const openButton = document.createElement('button');
+    openButton.type = 'button';
+    openButton.className = 'btn btn--small';
+    openButton.dataset.action = 'open-conversation';
+    openButton.textContent = 'Open Messages';
+    actions.append(openButton);
+    card.append(actions);
+
+    fragment.append(card);
+  });
+
+  container.append(fragment);
+}
+
+function handleBuyerConversationClick(event) {
+  if (!elements.buyerMessagesContainer) {
+    return;
+  }
+
+  const openButton = event.target.closest('[data-action="open-conversation"]');
+  if (!openButton || !elements.buyerMessagesContainer.contains(openButton)) {
+    return;
+  }
+
+  event.preventDefault();
+  const card = openButton.closest('[data-conversation-id]');
+  if (!card) {
+    return;
+  }
+
+  const listingId = card.dataset.listingId;
+  if (!listingId) {
+    return;
+  }
+
+  const conversationId = card.dataset.conversationId;
+  const conversation =
+    state.buyerConversations.find((item) => item._id === conversationId) || getConversationForListing(listingId);
+
+  openConversationModal({ listingId, conversation });
+}
+
 async function fetchAgentConversations() {
   if (!state.user || state.user.role !== 'agent') {
     state.agentConversations = [];
@@ -778,6 +1017,7 @@ async function fetchAgentConversations() {
   try {
     const conversations = await apiRequest('/conversations');
     state.agentConversations = Array.isArray(conversations) ? conversations : [];
+    sortConversations(state.agentConversations);
     state.agentConversations.forEach((conversation) => {
       storeConversation(conversation);
     });
@@ -785,6 +1025,31 @@ async function fetchAgentConversations() {
   } catch (error) {
     if (elements.agentMessagesContainer) {
       elements.agentMessagesContainer.innerHTML = `<div class="empty-state">${error.message}</div>`;
+    }
+  }
+}
+
+async function fetchBuyerConversations() {
+  if (!state.user || state.user.role !== 'user') {
+    state.buyerConversations = [];
+    if (elements.buyerMessagesContainer) {
+      elements.buyerMessagesContainer.innerHTML = '';
+    }
+    return;
+  }
+
+  try {
+    const conversations = await apiRequest('/conversations');
+    const list = Array.isArray(conversations) ? conversations.slice() : [];
+    state.buyerConversations = sortConversations(list);
+    state.buyerConversations.forEach((conversation) => {
+      storeConversation(conversation);
+    });
+    renderBuyerConversations();
+  } catch (error) {
+    state.buyerConversations = [];
+    if (elements.buyerMessagesContainer) {
+      elements.buyerMessagesContainer.innerHTML = `<div class="empty-state">${error.message}</div>`;
     }
   }
 }
@@ -822,6 +1087,7 @@ async function sendAgentConversationMessage(form) {
     const conversation = storeConversation(payload) || payload;
     const thread = container.querySelector('.conversation__thread');
     renderConversationThread(thread, conversation);
+    handleConversationUpdate(conversation);
     if (textarea) {
       textarea.value = '';
     }
@@ -1545,12 +1811,22 @@ function bootstrap() {
 
   if (elements.listingsContainer) {
     elements.listingsContainer.addEventListener('click', handleListingCardClick);
-    elements.listingsContainer.addEventListener('submit', handleListingConversationSubmit);
   }
 
   if (elements.agentMessagesContainer) {
     elements.agentMessagesContainer.addEventListener('submit', handleAgentConversationSubmit);
   }
+
+  if (elements.buyerMessagesContainer) {
+    elements.buyerMessagesContainer.addEventListener('click', handleBuyerConversationClick);
+  }
+
+  if (elements.conversationModal) {
+    elements.conversationModal.addEventListener('click', handleConversationModalClick);
+    elements.conversationModal.addEventListener('submit', handleConversationModalSubmit);
+  }
+
+  document.addEventListener('keydown', handleGlobalKeydown);
 }
 
 bootstrap();

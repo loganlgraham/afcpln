@@ -122,21 +122,6 @@ export function createListingCard(listing, template) {
     node.dataset.agentId = listing?.agent?._id || '';
   }
 
-  const conversation = node.querySelector('.listing__conversation');
-  if (conversation) {
-    conversation.dataset.listingId = listing?._id || '';
-    conversation.dataset.agentId = listing?.agent?._id || '';
-    const recipient = conversation.querySelector('[data-recipient]');
-    if (recipient) {
-      recipient.textContent = listing?.agent?.fullName || 'the listing agent';
-    }
-    const status = conversation.querySelector('.conversation__status');
-    if (status) {
-      status.textContent = '';
-      status.hidden = true;
-    }
-  }
-
   return node;
 }
 

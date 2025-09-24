@@ -140,6 +140,14 @@ body.listings-page .container {
   max-width: 460px;
 }
 
+.card__intro {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: #486581;
+  line-height: 1.55;
+  max-width: 560px;
+}
+
 .card__helper {
   margin: 0.25rem 0 0.75rem;
   font-size: 0.95rem;
@@ -517,13 +525,82 @@ body.listings-page .container {
   gap: 0.75rem;
 }
 
-.listing__conversation {
+.conversation-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-items: center;
+  padding: 2rem 1.5rem;
+}
+
+.conversation-modal.conversation-modal--open {
   display: grid;
-  gap: 0.75rem;
-  padding: 1rem;
-  border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(248, 250, 252, 0.9);
+}
+
+.conversation-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.conversation-modal__dialog {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+  width: min(640px, 94vw);
+  max-height: min(85vh, 720px);
+  padding: 1.5rem;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.conversation-modal__close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #334e68;
+  cursor: pointer;
+}
+
+.conversation-modal__close:hover,
+.conversation-modal__close:focus {
+  color: #0b7285;
+}
+
+.conversation__subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  color: #486581;
+}
+
+.conversation__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.conversation-modal__dialog .conversation__thread {
+  max-height: 320px;
+}
+
+.conversation-modal__dialog .conversation__actions {
+  justify-content: flex-end;
+}
+
+.conversation-modal__dialog .conversation__status {
+  font-size: 0.85rem;
 }
 
 .conversation__header {
@@ -638,6 +715,10 @@ body.listings-page .container {
   gap: 1rem;
 }
 
+.conversation-list--summary {
+  gap: 1.25rem;
+}
+
 .conversation-card {
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 14px;
@@ -645,6 +726,84 @@ body.listings-page .container {
   display: grid;
   gap: 0.75rem;
   background: #ffffff;
+}
+
+.conversation-summary {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+  padding: 1.2rem;
+  background: #ffffff;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.conversation-summary__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.conversation-summary__title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #102a43;
+}
+
+.conversation-summary__time {
+  font-size: 0.85rem;
+  color: #486581;
+}
+
+.conversation-summary__meta {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #486581;
+}
+
+.conversation-summary__preview {
+  margin: 0;
+  color: #243b53;
+  line-height: 1.5;
+}
+
+.conversation-summary__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.conversation-summary__actions .btn {
+  min-width: 140px;
+}
+
+body.conversation-modal-open {
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .conversation-modal {
+    padding: 1.5rem 1rem;
+  }
+
+  .conversation-modal__dialog {
+    width: 100%;
+    max-height: 90vh;
+    padding: 1.25rem;
+  }
+
+  .conversation-modal__close {
+    font-size: 1.25rem;
+  }
+
+  .conversation-modal__dialog .conversation__actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .conversation-summary {
+    padding: 1rem;
+  }
 }
 
 .conversation-card__header {
