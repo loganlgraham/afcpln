@@ -2,6 +2,7 @@ const express = require('express');
 const Conversation = require('../models/Conversation');
 const Listing = require('../models/Listing');
 const { authenticate } = require('../middleware/auth');
+const { sendConversationNotification } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -80,6 +81,14 @@ async function populateConversation(conversation) {
   }
 
   return conversation.populate(populateConfig);
+}
+
+async function notifyConversationParticipant(conversation, senderId, messageBody) {
+  try {
+    await sendConversationNotification(conversation, { senderId, messageBody });
+  } catch (error) {
+    console.error('Failed to send conversation notification email', error);
+  }
 }
 
 function buildListQuery(user, { listingId }) {
@@ -168,6 +177,7 @@ router.post('/', authenticate, async (req, res, next) => {
     await populateConversation(conversation);
 
     const payload = sanitizeConversation(conversation);
+    notifyConversationParticipant(payload, req.user?._id, trimmed);
     res.status(wasNew ? 201 : 200).json(payload);
   } catch (error) {
     if (error.code === 11000) {
@@ -206,7 +216,9 @@ router.post('/:id/messages', authenticate, async (req, res, next) => {
     await conversation.save();
     await populateConversation(conversation);
 
-    res.json(sanitizeConversation(conversation));
+    const payload = sanitizeConversation(conversation);
+    notifyConversationParticipant(payload, req.user?._id, trimmed);
+    res.json(payload);
   } catch (error) {
     next(error);
   }

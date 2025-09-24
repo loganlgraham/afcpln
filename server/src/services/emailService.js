@@ -367,8 +367,146 @@ async function sendRegistrationEmail(user) {
   await deliverEmail(message);
 }
 
+function resolveId(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'object') {
+    if (value._id) {
+      return resolveId(value._id);
+    }
+
+    if (value.id) {
+      return resolveId(value.id);
+    }
+
+    if (typeof value.toString === 'function' && value.toString() !== '[object Object]') {
+      return value.toString();
+    }
+  }
+
+  return String(value);
+}
+
+function normalizeParticipant(participant) {
+  if (!participant) {
+    return { _id: null, fullName: '', email: '', role: '' };
+  }
+
+  return {
+    _id: resolveId(participant._id || participant.id || participant),
+    fullName: participant.fullName || '',
+    email: participant.email || '',
+    role: participant.role || ''
+  };
+}
+
+function formatListingLocation(listing) {
+  if (!listing) {
+    return '';
+  }
+
+  const parts = [];
+  if (listing.area) {
+    parts.push(listing.area);
+  }
+
+  const cityState = [listing.address?.city, listing.address?.state].filter(Boolean).join(', ');
+  if (cityState) {
+    parts.push(cityState);
+  }
+
+  return parts.join(' • ');
+}
+
+function buildConversationNotificationEmail({ recipient, sender, listing, message }) {
+  if (!recipient?.email) {
+    return null;
+  }
+
+  const listingTitle = listing?.title || 'your listing';
+  const location = formatListingLocation(listing);
+  const recipientName = recipient.fullName || 'there';
+  const senderName = sender.fullName || (sender.role === 'agent' ? 'the listing agent' : 'the buyer');
+  const subject = senderName
+    ? `New message from ${senderName} about ${listingTitle}`
+    : `New message about ${listingTitle}`;
+
+  const lines = [
+    `Hi ${recipientName},`,
+    '',
+    senderName
+      ? `${senderName} just sent you a new message about ${listingTitle}.`
+      : `You have a new message about ${listingTitle}.`
+  ];
+
+  if (location) {
+    lines.push(location, '');
+  } else {
+    lines.push('');
+  }
+
+  if (message) {
+    lines.push(message, '');
+  }
+
+  lines.push(
+    'Log in to the AFC Private Listing Network to reply and keep the conversation going.',
+    '',
+    '— AFC Private Listings'
+  );
+
+  return {
+    to: recipient.email,
+    from: fromAddress,
+    subject,
+    text: lines.join('\n')
+  };
+}
+
+async function sendConversationNotification(conversation, { senderId, messageBody }) {
+  if (!conversation) {
+    return;
+  }
+
+  const agent = normalizeParticipant(conversation.agent);
+  const buyer = normalizeParticipant(conversation.buyer);
+  const normalizedSenderId = resolveId(senderId);
+
+  let recipient = agent;
+  let sender = buyer;
+
+  if (normalizedSenderId && normalizedSenderId === agent._id) {
+    recipient = buyer;
+    sender = agent;
+  }
+
+  if (!recipient?.email || (sender && sender._id && recipient._id && recipient._id === sender._id)) {
+    return;
+  }
+
+  const message = buildConversationNotificationEmail({
+    recipient,
+    sender,
+    listing: conversation.listing,
+    message: messageBody
+  });
+
+  if (!message) {
+    return;
+  }
+
+  await deliverEmail(message);
+}
+
 module.exports = {
   sendListingMatchEmail,
-  sendRegistrationEmail
+  sendRegistrationEmail,
+  sendConversationNotification
 };
 

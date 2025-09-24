@@ -78,7 +78,7 @@
         </div>
       </section>
 
-      <section class="card" id="listing-search" hidden>
+      <section class="card" id="listing-results" hidden>
         <div class="card__heading">
           <h2>Find Private Listings</h2>
           <p class="card__helper">
@@ -90,6 +90,9 @@
           <p class="form-section__description">Newest opportunities that meet your filters will surface here first.</p>
           <div id="listings" class="listing-grid" aria-live="polite"></div>
         </div>
+      </section>
+      <section class="card" id="listing-search" hidden>
+        <h2>Refine Your Search</h2>
         <form id="filters" class="form form--search">
           <div class="form-section">
             <h3>Location Focus</h3>
@@ -203,13 +206,6 @@
             Review everything you have shared with the network and update the status as deals progress.
           </p>
           <div id="agent-listings" class="listing-grid listing-grid--manage" aria-live="polite"></div>
-        </div>
-        <div class="form-section" id="agent-messages-section" hidden>
-          <h3>Buyer Messages</h3>
-          <p class="form-section__description">
-            Continue conversations with prospective buyers directly from your listing dashboard.
-          </p>
-          <div id="agent-messages" class="conversation-list" aria-live="polite"></div>
         </div>
       </section>
 

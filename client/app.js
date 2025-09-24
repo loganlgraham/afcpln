@@ -10,6 +10,7 @@ const elements = {
   filtersForm: document.getElementById('filters'),
   listingsContainer: document.getElementById('listings'),
   savedSearchList: document.getElementById('saved-search-list'),
+  listingResultsSection: document.getElementById('listing-results'),
   listingSearchSection: document.getElementById('listing-search'),
   savedSearchesSection: document.getElementById('saved-searches'),
   agentToolsSection: document.getElementById('agent-tools'),
@@ -23,8 +24,6 @@ const elements = {
   listingPhotoInput: document.querySelector('#listing-form input[name="photos"]'),
   listingPhotoPreviews: document.getElementById('listing-photo-previews'),
   agentListingsContainer: document.getElementById('agent-listings'),
-  agentMessagesContainer: document.getElementById('agent-messages'),
-  agentMessagesSection: document.getElementById('agent-messages-section'),
   buyerMessagesSection: document.getElementById('buyer-messages'),
   buyerMessagesContainer: document.getElementById('buyer-messages-list'),
   conversationModal: document.getElementById('conversation-modal'),
@@ -200,14 +199,14 @@ function updateUserStatus() {
 function toggleSections() {
   const isAuthenticated = Boolean(state.user);
   elements.authSection.hidden = isAuthenticated;
+  if (elements.listingResultsSection) {
+    elements.listingResultsSection.hidden = !isAuthenticated;
+  }
   elements.listingSearchSection.hidden = !isAuthenticated;
   elements.agentToolsSection.hidden = !isAuthenticated || state.user.role !== 'agent';
   elements.savedSearchesSection.hidden = !isAuthenticated || state.user.role !== 'user';
   if (elements.buyerMessagesSection) {
     elements.buyerMessagesSection.hidden = true;
-  }
-  if (elements.agentMessagesSection) {
-    elements.agentMessagesSection.hidden = true;
   }
 }
 
@@ -219,9 +218,6 @@ function updateUI() {
     if (state.user.role === 'user') {
       fetchSavedSearches();
       fetchBuyerConversations();
-      if (elements.agentMessagesContainer) {
-        elements.agentMessagesContainer.innerHTML = '';
-      }
     }
     if (state.user.role === 'agent') {
       fetchMyListings();
@@ -235,9 +231,6 @@ function updateUI() {
     elements.savedSearchList.innerHTML = '';
     if (elements.agentListingsContainer) {
       elements.agentListingsContainer.innerHTML = '';
-    }
-    if (elements.agentMessagesContainer) {
-      elements.agentMessagesContainer.innerHTML = '';
     }
     if (elements.buyerMessagesContainer) {
       elements.buyerMessagesContainer.innerHTML = '';
@@ -413,7 +406,6 @@ function handleConversationUpdate(conversation) {
 
   if (state.user?.role === 'agent') {
     upsertConversation(state.agentConversations, stored);
-    renderAgentConversations();
   } else if (state.user?.role === 'user') {
     upsertConversation(state.buyerConversations, stored);
     renderBuyerConversations();
@@ -1152,104 +1144,6 @@ function handleListingCardClick(event) {
   openConversationModal({ listingId, listing: fallbackListing, conversation });
 }
 
-function renderAgentConversations() {
-  if (!elements.agentMessagesContainer) {
-    return;
-  }
-
-  const container = elements.agentMessagesContainer;
-  container.innerHTML = '';
-
-  if (!state.user || state.user.role !== 'agent') {
-    return;
-  }
-
-  sortConversations(state.agentConversations);
-
-  if (!state.agentConversations.length) {
-    container.innerHTML =
-      '<div class="empty-state">Messages from interested buyers will appear here once conversations begin.</div>';
-    return;
-  }
-
-  const fragment = document.createDocumentFragment();
-
-  state.agentConversations.forEach((conversation) => {
-    const card = document.createElement('article');
-    card.className = 'conversation-card';
-    card.dataset.conversationId = conversation._id;
-    const listingId = extractId(conversation.listing);
-    if (listingId) {
-      card.dataset.listingId = listingId;
-    }
-
-    const header = document.createElement('div');
-    header.className = 'conversation-card__header';
-
-    const title = document.createElement('h4');
-    title.className = 'conversation-card__title';
-    title.textContent = conversation.listing?.title || 'Listing Conversation';
-
-    const subtitle = document.createElement('p');
-    subtitle.className = 'conversation-card__subtitle';
-    const subtitleParts = [];
-    if (conversation.buyer?.fullName) {
-      subtitleParts.push(`Buyer: ${conversation.buyer.fullName}`);
-    }
-    const locationParts = [];
-    if (conversation.listing?.area) {
-      locationParts.push(conversation.listing.area);
-    }
-    if (conversation.listing?.address?.city) {
-      locationParts.push(conversation.listing.address.city);
-    }
-    if (locationParts.length) {
-      subtitleParts.push(locationParts.join(', '));
-    }
-    subtitle.textContent = subtitleParts.join(' • ');
-
-    header.append(title, subtitle);
-    card.append(header);
-
-    const thread = document.createElement('div');
-    thread.className = 'conversation__thread';
-    card.append(thread);
-    renderConversationThread(thread, conversation);
-
-    const form = document.createElement('form');
-    form.className = 'conversation__form';
-    form.dataset.conversationId = conversation._id;
-    form.dataset.listingId = listingId;
-
-    const textarea = document.createElement('textarea');
-    textarea.name = 'message';
-    textarea.rows = 3;
-    textarea.required = true;
-    textarea.placeholder = 'Share an update or answer their question.';
-    form.append(textarea);
-
-    const actions = document.createElement('div');
-    actions.className = 'conversation__actions';
-    const sendButton = document.createElement('button');
-    sendButton.type = 'submit';
-    sendButton.className = 'btn btn--small primary';
-    sendButton.textContent = 'Send Reply';
-    actions.append(sendButton);
-    form.append(actions);
-    card.append(form);
-
-    const status = document.createElement('p');
-    status.className = 'conversation__status';
-    status.hidden = true;
-    status.setAttribute('role', 'status');
-    card.append(status);
-
-    fragment.append(card);
-  });
-
-  container.append(fragment);
-}
-
 function renderBuyerConversations() {
   if (!elements.buyerMessagesContainer) {
     return;
@@ -1395,27 +1289,21 @@ function handleBuyerConversationClick(event) {
 async function fetchAgentConversations() {
   if (!state.user || state.user.role !== 'agent') {
     state.agentConversations = [];
-    if (elements.agentMessagesContainer) {
-      elements.agentMessagesContainer.innerHTML = '';
-    }
     return;
   }
 
   try {
     const conversations = await apiRequest('/conversations');
-    state.agentConversations = Array.isArray(conversations) ? conversations : [];
+    state.agentConversations = Array.isArray(conversations) ? conversations.slice() : [];
     sortConversations(state.agentConversations);
     state.agentConversations.forEach((conversation) => {
       storeConversation(conversation);
     });
-    renderAgentConversations();
     if (isConversationModalOpen()) {
       syncConversationModal();
     }
   } catch (error) {
-    if (elements.agentMessagesContainer) {
-      elements.agentMessagesContainer.innerHTML = `<div class="empty-state">${error.message}</div>`;
-    }
+    console.error(error);
   }
 }
 
@@ -1445,67 +1333,6 @@ async function fetchBuyerConversations() {
       elements.buyerMessagesContainer.innerHTML = `<div class="empty-state">${error.message}</div>`;
     }
   }
-}
-
-async function sendAgentConversationMessage(form) {
-  const container = form.closest('.conversation-card');
-  if (!container) {
-    return;
-  }
-
-  const textarea = form.querySelector('textarea[name="message"]');
-  const message = textarea?.value?.trim();
-  if (!message) {
-    setConversationStatus(container, 'Please enter a message.', 'error');
-    return;
-  }
-
-  const conversationId = form.dataset.conversationId;
-  if (!conversationId) {
-    setConversationStatus(container, 'Conversation not found.', 'error');
-    return;
-  }
-
-  const sendButton = form.querySelector('button[type="submit"]');
-
-  try {
-    if (sendButton) {
-      sendButton.disabled = true;
-    }
-    setConversationStatus(container, 'Sending…');
-    const payload = await apiRequest(`/conversations/${conversationId}/messages`, {
-      method: 'POST',
-      body: { message }
-    });
-    const conversation = storeConversation(payload) || payload;
-    const thread = container.querySelector('.conversation__thread');
-    renderConversationThread(thread, conversation);
-    handleConversationUpdate(conversation);
-    if (textarea) {
-      textarea.value = '';
-    }
-    setConversationStatus(container, 'Reply sent', 'success');
-  } catch (error) {
-    setConversationStatus(container, error.message || 'Unable to send message.', 'error');
-  } finally {
-    if (sendButton) {
-      sendButton.disabled = false;
-    }
-  }
-}
-
-function handleAgentConversationSubmit(event) {
-  if (!elements.agentMessagesContainer) {
-    return;
-  }
-
-  const form = event.target.closest('.conversation__form');
-  if (!form || !elements.agentMessagesContainer.contains(form)) {
-    return;
-  }
-
-  event.preventDefault();
-  sendAgentConversationMessage(form);
 }
 
 function validateListingPhotos(photoFiles) {
@@ -2204,10 +2031,6 @@ function bootstrap() {
 
   if (elements.listingsContainer) {
     elements.listingsContainer.addEventListener('click', handleListingCardClick);
-  }
-
-  if (elements.agentMessagesContainer) {
-    elements.agentMessagesContainer.addEventListener('submit', handleAgentConversationSubmit);
   }
 
   if (elements.buyerMessagesContainer) {

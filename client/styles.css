@@ -399,6 +399,7 @@ body.listings-page .container {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+#listing-results,
 #listing-search {
   display: grid;
   gap: 1.25rem;
@@ -408,7 +409,7 @@ body.listings-page .container {
   gap: 1.35rem;
 }
 
-#listing-search .form-section--results {
+#listing-results .form-section--results {
   gap: 1rem;
 }
 
@@ -426,7 +427,7 @@ body.listings-page .container {
   margin-top: 1.5rem;
 }
 
-#listing-search .form-section--results h3 {
+#listing-results .form-section--results h3 {
   margin: 0;
   font-size: 1.05rem;
   letter-spacing: 0.02em;
@@ -1209,6 +1210,7 @@ body.conversation-modal-open {
     margin-top: -2.5rem;
   }
 
+  #listing-results,
   #listing-search {
     gap: 1.5rem;
   }
