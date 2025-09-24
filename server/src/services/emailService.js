@@ -7,12 +7,16 @@ const brandName =
     ? process.env.EMAIL_FROM_NAME.trim()
     : 'AFC Private Listings';
 
+const DEFAULT_RESEND_DOMAIN = 'lgweb.app';
+
 const hasResendConfigured = Boolean(process.env.RESEND_API_KEY);
 
 const resendDomain =
   typeof process.env.RESEND_DOMAIN === 'string' && process.env.RESEND_DOMAIN.trim()
     ? process.env.RESEND_DOMAIN.trim()
-    : '';
+    : hasResendConfigured
+      ? DEFAULT_RESEND_DOMAIN
+      : '';
 
 const fromAddress = resolveFromAddress();
 
@@ -95,7 +99,7 @@ function resolveFromAddress() {
     return formatSenderAddress('onboarding@resend.dev');
   }
 
-  return formatSenderAddress('no-reply@afcpln.local');
+  return formatSenderAddress('no-reply@lgweb.app');
 }
 
 function createNodemailerTransport() {
