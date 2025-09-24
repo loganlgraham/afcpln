@@ -12,7 +12,20 @@
         <h1>Private Listing Network</h1>
         <p>Connect listing agents with motivated buyers in the AFC &amp; AHA communities.</p>
       </div>
-      <div id="user-status" class="hero__status"></div>
+      <div class="hero__actions">
+        <button
+          type="button"
+          id="message-center-toggle"
+          class="hero__icon-button"
+          aria-label="Open messages"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          hidden
+        >
+          <span class="hero__icon" aria-hidden="true"></span>
+        </button>
+        <div id="user-status" class="hero__status"></div>
+      </div>
     </header>
 
     <main class="container">
@@ -191,7 +204,7 @@
           </p>
           <div id="agent-listings" class="listing-grid listing-grid--manage" aria-live="polite"></div>
         </div>
-        <div class="form-section" id="agent-messages-section">
+        <div class="form-section" id="agent-messages-section" hidden>
           <h3>Buyer Messages</h3>
           <p class="form-section__description">
             Continue conversations with prospective buyers directly from your listing dashboard.
@@ -301,32 +314,65 @@
 
     <div id="conversation-modal" class="conversation-modal" hidden>
       <div class="conversation-modal__backdrop" data-conversation-dismiss></div>
-      <div class="conversation-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="conversation-modal-title">
-        <header class="conversation__header">
-          <div>
-            <h4 class="conversation__title" id="conversation-modal-title">Message <span data-recipient></span></h4>
-            <p class="conversation__subtitle" data-listing-title></p>
+      <div
+        class="conversation-modal__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="conversation-modal-title"
+      >
+        <aside class="conversation-modal__sidebar">
+          <div class="conversation-modal__sidebar-header">
+            <h3>Inbox</h3>
           </div>
-          <button type="button" class="conversation-modal__close" data-conversation-close aria-label="Close message window">
-            ×
-          </button>
-        </header>
-        <div class="conversation__thread" aria-live="polite"></div>
-        <form class="conversation__form" data-listing-id="">
-          <label class="conversation__label" for="conversation-modal-message">Message</label>
-          <textarea
-            id="conversation-modal-message"
-            name="message"
-            rows="4"
-            placeholder="Ask a question or request a tour."
-            required
-          ></textarea>
-          <div class="conversation__actions">
-            <button type="submit" class="btn btn--small primary">Send Message</button>
-            <button type="button" class="btn btn--small" data-conversation-close>Close</button>
+          <div class="conversation-modal__sidebar-body">
+            <div id="conversation-modal-empty" class="conversation-modal__empty" hidden>
+              No conversations yet. Reach out from a listing to start messaging.
+            </div>
+            <div id="conversation-modal-list" class="conversation-modal__list" role="listbox"></div>
           </div>
-        </form>
-        <p class="conversation__status" role="status" hidden></p>
+        </aside>
+        <section class="conversation-modal__content" aria-live="polite">
+          <header class="conversation__header">
+            <div>
+              <h4 class="conversation__title" id="conversation-modal-title">
+                Message <span data-recipient></span>
+              </h4>
+              <p class="conversation__subtitle" data-listing-title></p>
+            </div>
+            <button
+              type="button"
+              class="conversation-modal__close"
+              data-conversation-close
+              aria-label="Close message window"
+            >
+              ×
+            </button>
+          </header>
+          <div class="conversation-modal__body">
+            <div class="conversation-modal__placeholder" data-modal-placeholder hidden>
+              Select a conversation to view messages.
+            </div>
+            <div class="conversation__thread" aria-live="polite"></div>
+          </div>
+          <form class="conversation__form" data-listing-id="">
+            <label class="conversation__label" for="conversation-modal-message">Message</label>
+            <textarea
+              id="conversation-modal-message"
+              name="message"
+              rows="4"
+              placeholder="Ask a question or request a tour."
+              required
+            ></textarea>
+            <p class="conversation__helper" data-compose-helper hidden>
+              Choose a conversation to start messaging.
+            </p>
+            <div class="conversation__actions">
+              <button type="submit" class="btn btn--small primary">Send Message</button>
+              <button type="button" class="btn btn--small" data-conversation-close>Close</button>
+            </div>
+          </form>
+          <p class="conversation__status" role="status" hidden></p>
+        </section>
       </div>
     </div>
 

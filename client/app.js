@@ -24,10 +24,16 @@ const elements = {
   listingPhotoPreviews: document.getElementById('listing-photo-previews'),
   agentListingsContainer: document.getElementById('agent-listings'),
   agentMessagesContainer: document.getElementById('agent-messages'),
+  agentMessagesSection: document.getElementById('agent-messages-section'),
   buyerMessagesSection: document.getElementById('buyer-messages'),
   buyerMessagesContainer: document.getElementById('buyer-messages-list'),
   conversationModal: document.getElementById('conversation-modal'),
   conversationModalDialog: document.querySelector('#conversation-modal .conversation-modal__dialog'),
+  conversationModalContent: document.querySelector('#conversation-modal .conversation-modal__content'),
+  conversationModalList: document.getElementById('conversation-modal-list'),
+  conversationModalEmpty: document.getElementById('conversation-modal-empty'),
+  conversationModalPlaceholder: document.querySelector('#conversation-modal [data-modal-placeholder]'),
+  messageCenterToggle: document.getElementById('message-center-toggle'),
   listingSubmitButton: document.getElementById('listing-submit'),
   listingCancelButton: document.getElementById('listing-cancel')
 };
@@ -43,7 +49,10 @@ const state = {
   conversationsById: {},
   listingConversations: {},
   agentConversations: [],
-  buyerConversations: []
+  buyerConversations: [],
+  activeConversationId: null,
+  pendingListingId: null,
+  pendingListingContext: null
 };
 
 const LISTING_PHOTO_LIMITS = {
@@ -124,6 +133,9 @@ function handleLogout() {
   state.listingConversations = {};
   state.agentConversations = [];
   state.buyerConversations = [];
+  state.activeConversationId = null;
+  state.pendingListingId = null;
+  state.pendingListingContext = null;
   if (elements.listingForm) {
     resetListingForm();
   }
@@ -150,6 +162,15 @@ function updateUserStatus() {
   const statusEl = elements.userStatus;
   const isGuest = !state.user;
   statusEl.classList.toggle('hero__status--guest', isGuest);
+
+  if (elements.messageCenterToggle) {
+    elements.messageCenterToggle.hidden = isGuest;
+    elements.messageCenterToggle.disabled = isGuest;
+    elements.messageCenterToggle.setAttribute('aria-expanded', isConversationModalOpen() ? 'true' : 'false');
+    if (isGuest) {
+      elements.messageCenterToggle.classList.remove('hero__icon-button--active');
+    }
+  }
 
   if (isGuest) {
     statusEl.innerHTML = `
@@ -183,7 +204,10 @@ function toggleSections() {
   elements.agentToolsSection.hidden = !isAuthenticated || state.user.role !== 'agent';
   elements.savedSearchesSection.hidden = !isAuthenticated || state.user.role !== 'user';
   if (elements.buyerMessagesSection) {
-    elements.buyerMessagesSection.hidden = !isAuthenticated || state.user.role !== 'user';
+    elements.buyerMessagesSection.hidden = true;
+  }
+  if (elements.agentMessagesSection) {
+    elements.agentMessagesSection.hidden = true;
   }
 }
 
@@ -385,12 +409,279 @@ function handleConversationUpdate(conversation) {
     return;
   }
 
+  const stored = storeConversation(conversation) || conversation;
+
   if (state.user?.role === 'agent') {
-    upsertConversation(state.agentConversations, conversation);
+    upsertConversation(state.agentConversations, stored);
     renderAgentConversations();
   } else if (state.user?.role === 'user') {
-    upsertConversation(state.buyerConversations, conversation);
+    upsertConversation(state.buyerConversations, stored);
     renderBuyerConversations();
+  }
+
+  const listingId = extractId(stored.listing);
+  if (state.pendingListingId && listingId && listingId === state.pendingListingId) {
+    state.activeConversationId = stored._id || null;
+    state.pendingListingId = null;
+    state.pendingListingContext = null;
+  }
+
+  if (isConversationModalOpen()) {
+    syncConversationModal();
+  }
+}
+
+function getCurrentUserConversations() {
+  if (!state.user) {
+    return [];
+  }
+
+  if (state.user.role === 'agent') {
+    return state.agentConversations || [];
+  }
+
+  return state.buyerConversations || [];
+}
+
+function buildConversationListItem(conversation) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'conversation-modal__list-item';
+  button.dataset.conversationId = conversation?._id || '';
+  const listingId = extractId(conversation?.listing);
+  if (listingId) {
+    button.dataset.listingId = listingId;
+  }
+  button.setAttribute('role', 'option');
+
+  const isActive = state.activeConversationId && conversation?._id === state.activeConversationId;
+  button.classList.toggle('is-active', Boolean(isActive));
+  button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+
+  const title = document.createElement('div');
+  title.className = 'conversation-modal__list-item-title';
+  title.textContent = conversation?.listing?.title || 'Listing Conversation';
+  button.append(title);
+
+  const meta = document.createElement('div');
+  meta.className = 'conversation-modal__list-item-meta';
+  const counterpart = document.createElement('span');
+  const counterpartName =
+    state.user?.role === 'agent'
+      ? conversation?.buyer?.fullName || 'Buyer'
+      : conversation?.agent?.fullName || 'Listing Agent';
+  counterpart.textContent = counterpartName;
+  meta.append(counterpart);
+
+  const timeValue = conversation?.lastMessageAt || conversation?.updatedAt || conversation?.createdAt;
+  const timeText = formatTimestamp(timeValue);
+  if (timeText) {
+    const time = document.createElement('span');
+    time.textContent = timeText;
+    meta.append(time);
+  }
+
+  button.append(meta);
+
+  const snippet = document.createElement('p');
+  snippet.className = 'conversation-modal__list-item-snippet';
+  const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
+  const lastMessage = messages.length ? messages[messages.length - 1] : null;
+  if (lastMessage?.body) {
+    const senderId = extractId(lastMessage.sender);
+    const isCurrentUser = senderId && senderId === getUserId();
+    const senderLabel = isCurrentUser ? 'You' : lastMessage.sender?.fullName || counterpartName;
+    const body = lastMessage.body.trim();
+    const truncated = body.length > 100 ? `${body.slice(0, 97)}…` : body;
+    snippet.textContent = `${senderLabel}: ${truncated}`;
+  } else {
+    snippet.textContent = 'No messages yet.';
+  }
+  button.append(snippet);
+
+  return button;
+}
+
+function renderConversationSidebar() {
+  if (!elements.conversationModalList) {
+    return;
+  }
+
+  const listEl = elements.conversationModalList;
+  listEl.innerHTML = '';
+
+  const conversations = getCurrentUserConversations();
+  const hasConversations = Array.isArray(conversations) && conversations.length > 0;
+  const hasPending = Boolean(state.pendingListingId && state.pendingListingContext);
+
+  if (elements.conversationModalEmpty) {
+    elements.conversationModalEmpty.hidden = hasConversations || hasPending;
+  }
+
+  if (hasPending) {
+    const composeItem = document.createElement('button');
+    composeItem.type = 'button';
+    composeItem.className = 'conversation-modal__list-item conversation-modal__list-item--compose';
+    composeItem.dataset.listingId = state.pendingListingId;
+    composeItem.setAttribute('role', 'option');
+    const isActive = !state.activeConversationId;
+    composeItem.classList.toggle('is-active', isActive);
+    composeItem.setAttribute('aria-selected', isActive ? 'true' : 'false');
+
+    const title = document.createElement('div');
+    title.className = 'conversation-modal__list-item-title';
+    title.textContent = state.pendingListingContext?.title || 'New Message';
+    composeItem.append(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'conversation-modal__list-item-meta';
+    const counterpart = document.createElement('span');
+    counterpart.textContent = state.pendingListingContext?.agent?.fullName || 'Listing Agent';
+    meta.append(counterpart);
+    composeItem.append(meta);
+
+    const snippet = document.createElement('p');
+    snippet.className = 'conversation-modal__list-item-snippet';
+    snippet.textContent = 'Start a message for this property.';
+    composeItem.append(snippet);
+
+    listEl.append(composeItem);
+  }
+
+  if (hasConversations) {
+    const sorted = conversations.slice();
+    sortConversations(sorted);
+    sorted.forEach((conversationItem) => {
+      const item = buildConversationListItem(conversationItem);
+      listEl.append(item);
+    });
+  }
+}
+
+function updateConversationModalContent({ conversation = null, listingId = null, listing = null } = {}) {
+  if (!elements.conversationModalContent) {
+    return;
+  }
+
+  const container = elements.conversationModalContent;
+  const placeholder = elements.conversationModalPlaceholder;
+  const form = container.querySelector('.conversation__form');
+  const textarea = form?.querySelector('textarea[name="message"]');
+  const sendButton = form?.querySelector('button[type="submit"]');
+  const helper = container.querySelector('[data-compose-helper]');
+  const recipientEl = container.querySelector('[data-recipient]');
+  const listingTitleEl = container.querySelector('[data-listing-title]');
+  const thread = container.querySelector('.conversation__thread');
+
+  const resolvedConversation = conversation || null;
+  const resolvedListingId = listingId || extractId(resolvedConversation?.listing);
+  const resolvedListing = listing || resolvedConversation?.listing || null;
+
+  const agentName = resolvedConversation?.agent?.fullName || resolvedListing?.agent?.fullName || 'the listing agent';
+  const buyerName = resolvedConversation?.buyer?.fullName || '';
+  const recipientName =
+    state.user?.role === 'agent'
+      ? buyerName || 'the buyer'
+      : agentName || 'the listing agent';
+  if (recipientEl) {
+    recipientEl.textContent = recipientName;
+  }
+
+  const listingTitle = resolvedListing?.title || '';
+  if (listingTitleEl) {
+    listingTitleEl.textContent = listingTitle ? `Regarding ${listingTitle}` : '';
+    listingTitleEl.hidden = !listingTitle;
+  }
+
+  if (form) {
+    if (resolvedListingId) {
+      form.dataset.listingId = resolvedListingId;
+    } else {
+      delete form.dataset.listingId;
+    }
+    form.dataset.conversationId = resolvedConversation?._id || '';
+  }
+
+  renderConversation(container, resolvedConversation);
+
+  const hasConversation = Boolean(resolvedConversation);
+  const hasContext = Boolean(resolvedListingId);
+  const hasMessages = Boolean(
+    resolvedConversation && Array.isArray(resolvedConversation.messages) && resolvedConversation.messages.length
+  );
+
+  if (placeholder) {
+    if (!hasConversation && !hasContext) {
+      placeholder.textContent = 'Select a conversation to view messages.';
+      placeholder.hidden = false;
+    } else if (!hasConversation && hasContext) {
+      placeholder.textContent = 'Introduce yourself or request a tour to start this conversation.';
+      placeholder.hidden = false;
+    } else if (hasConversation && !hasMessages) {
+      placeholder.textContent = 'No messages yet. Send a note to get the conversation going.';
+      placeholder.hidden = false;
+    } else {
+      placeholder.hidden = true;
+    }
+  }
+
+  if (thread && placeholder) {
+    thread.hidden = !placeholder.hidden && !hasMessages;
+  }
+
+  if (helper) {
+    helper.hidden = hasConversation || hasContext;
+  }
+
+  const canCompose = hasConversation || hasContext;
+  if (textarea) {
+    textarea.disabled = !canCompose;
+    if (!canCompose) {
+      textarea.value = '';
+    }
+  }
+  if (sendButton) {
+    sendButton.disabled = !canCompose;
+  }
+}
+
+function syncConversationModal() {
+  if (!isConversationModalOpen()) {
+    return;
+  }
+
+  renderConversationSidebar();
+
+  const activeConversation = state.activeConversationId
+    ? state.conversationsById[state.activeConversationId]
+    : null;
+
+  const listingId = activeConversation
+    ? extractId(activeConversation.listing)
+    : state.pendingListingId;
+
+  const listing =
+    activeConversation?.listing ||
+    state.pendingListingContext ||
+    (listingId ? findListingById(listingId) : null);
+
+  updateConversationModalContent({ conversation: activeConversation, listingId, listing });
+}
+
+async function ensureConversationsLoaded(force = false) {
+  if (!state.user) {
+    return;
+  }
+
+  const existing = getCurrentUserConversations();
+  if (!force && existing.length) {
+    return;
+  }
+
+  if (state.user.role === 'agent') {
+    await fetchAgentConversations();
+  } else if (state.user.role === 'user') {
+    await fetchBuyerConversations();
   }
 }
 
@@ -508,6 +799,7 @@ function resetConversationForm(container) {
       textarea.value = '';
     }
     form.dataset.conversationId = '';
+    delete form.dataset.listingId;
   }
 
   clearConversationStatus(container);
@@ -563,65 +855,87 @@ function decorateListingCard(node, listing) {
   }
 }
 
-async function openConversationModal({ listingId, listing = null, conversation = null } = {}) {
-  if (!elements.conversationModal || !elements.conversationModalDialog || !listingId) {
+async function openConversationModal({ listingId = null, listing = null, conversation = null, conversationId = null } = {}) {
+  if (!elements.conversationModal || !elements.conversationModalDialog || !elements.conversationModalContent) {
     return;
   }
 
-  const modal = elements.conversationModal;
-  const container = elements.conversationModalDialog;
-  const form = container.querySelector('.conversation__form');
-  const recipient = container.querySelector('[data-recipient]');
-  const listingTitleEl = container.querySelector('[data-listing-title]');
+  await ensureConversationsLoaded(!listingId && !conversation && !conversationId);
 
-  const resolvedListing = listing || findListingById(listingId) || conversation?.listing || null;
-  const resolvedConversation = conversation ? storeConversation(conversation) : getConversationForListing(listingId);
+  let resolvedConversation = null;
   if (conversation) {
-    handleConversationUpdate(conversation);
+    resolvedConversation = storeConversation(conversation);
+  } else if (conversationId) {
+    resolvedConversation = state.conversationsById[conversationId] || null;
   }
 
-  const agentInfo = conversation?.agent || resolvedListing?.agent || null;
-  const agentName = agentInfo?.fullName || 'the listing agent';
-
-  if (recipient) {
-    recipient.textContent = agentName;
+  let targetListingId = listingId || (resolvedConversation ? extractId(resolvedConversation.listing) : '');
+  if (!resolvedConversation && targetListingId) {
+    resolvedConversation = getConversationForListing(targetListingId);
   }
 
-  const listingTitle = resolvedListing?.title || conversation?.listing?.title || '';
-  if (listingTitleEl) {
-    listingTitleEl.textContent = listingTitle ? `Regarding ${listingTitle}` : '';
-    listingTitleEl.hidden = !listingTitle;
+  if (!resolvedConversation && !targetListingId) {
+    const existing = getCurrentUserConversations();
+    if (existing.length) {
+      resolvedConversation = existing[0];
+      targetListingId = extractId(resolvedConversation?.listing);
+    }
   }
 
-  if (form) {
-    form.dataset.listingId = listingId;
-    form.dataset.conversationId = resolvedConversation?._id || '';
+  let resolvedListing =
+    listing ||
+    resolvedConversation?.listing ||
+    (targetListingId ? findListingById(targetListingId) : null);
+
+  if (resolvedConversation) {
+    storeConversation(resolvedConversation);
   }
 
-  container.dataset.listingId = listingId;
-  modal.dataset.listingId = listingId;
-  modal.dataset.conversationId = resolvedConversation?._id || '';
+  state.activeConversationId = resolvedConversation?._id || null;
+  state.pendingListingId = resolvedConversation ? null : targetListingId || null;
+  state.pendingListingContext = resolvedConversation ? null : resolvedListing || null;
 
-  renderConversation(container, resolvedConversation);
-  clearConversationStatus(container);
-
+  const modal = elements.conversationModal;
   modal.hidden = false;
   modal.classList.add('conversation-modal--open');
   document.body.classList.add('conversation-modal-open');
 
-  const textarea = container.querySelector('textarea[name="message"]');
-  if (textarea) {
+  if (elements.messageCenterToggle) {
+    elements.messageCenterToggle.classList.add('hero__icon-button--active');
+    elements.messageCenterToggle.setAttribute('aria-expanded', 'true');
+  }
+
+  clearConversationStatus(elements.conversationModalContent);
+  syncConversationModal();
+
+  const activeListingId = state.activeConversationId
+    ? extractId((state.conversationsById[state.activeConversationId] || {}).listing)
+    : state.pendingListingId || '';
+  if (activeListingId) {
+    modal.dataset.listingId = activeListingId;
+  } else {
+    delete modal.dataset.listingId;
+  }
+  modal.dataset.conversationId = state.activeConversationId || '';
+
+  const textarea = elements.conversationModalContent.querySelector('textarea[name="message"]');
+  if (textarea && !textarea.disabled) {
     textarea.focus();
   }
 
-  try {
-    const loaded = await loadConversationForListing(listingId, container);
-    if (loaded && form) {
-      form.dataset.conversationId = loaded._id || '';
-      modal.dataset.conversationId = loaded._id || '';
+  if (state.pendingListingId && !resolvedConversation) {
+    try {
+      const loaded = await loadConversationForListing(state.pendingListingId, elements.conversationModalContent);
+      if (loaded) {
+        state.activeConversationId = loaded._id || null;
+        state.pendingListingId = null;
+        state.pendingListingContext = null;
+        modal.dataset.conversationId = state.activeConversationId || '';
+        syncConversationModal();
+      }
+    } catch (error) {
+      // handled within loadConversationForListing
     }
-  } catch (error) {
-    // handled within loadConversationForListing
   }
 }
 
@@ -631,14 +945,25 @@ function closeConversationModal() {
   }
 
   const modal = elements.conversationModal;
-  const container = elements.conversationModalDialog;
   modal.classList.remove('conversation-modal--open');
   modal.hidden = true;
   document.body.classList.remove('conversation-modal-open');
   delete modal.dataset.listingId;
   delete modal.dataset.conversationId;
-  delete container.dataset.listingId;
-  resetConversationForm(container);
+
+  if (elements.messageCenterToggle) {
+    elements.messageCenterToggle.classList.remove('hero__icon-button--active');
+    elements.messageCenterToggle.setAttribute('aria-expanded', 'false');
+  }
+
+  if (elements.conversationModalContent) {
+    resetConversationForm(elements.conversationModalContent);
+    clearConversationStatus(elements.conversationModalContent);
+  }
+
+  state.activeConversationId = null;
+  state.pendingListingId = null;
+  state.pendingListingContext = null;
 }
 
 function isConversationModalOpen() {
@@ -675,7 +1000,7 @@ function handleConversationModalSubmit(event) {
     return;
   }
 
-  sendListingMessage(listingId, form, elements.conversationModalDialog);
+  sendListingMessage(listingId, form, elements.conversationModalContent);
 }
 
 function handleGlobalKeydown(event) {
@@ -691,13 +1016,63 @@ function handleGlobalKeydown(event) {
   closeConversationModal();
 }
 
+function handleConversationListClick(event) {
+  if (!elements.conversationModalList) {
+    return;
+  }
+
+  const option = event.target.closest('.conversation-modal__list-item');
+  if (!option || !elements.conversationModalList.contains(option)) {
+    return;
+  }
+
+  event.preventDefault();
+  const conversationId = option.dataset.conversationId || '';
+  const listingId = option.dataset.listingId || '';
+
+  if (conversationId && conversationId === state.activeConversationId) {
+    return;
+  }
+
+  if (conversationId) {
+    state.activeConversationId = conversationId;
+    state.pendingListingId = null;
+    state.pendingListingContext = null;
+    syncConversationModal();
+    return;
+  }
+
+  if (listingId) {
+    const listing = findListingById(listingId) || state.pendingListingContext || null;
+    state.activeConversationId = null;
+    state.pendingListingId = listingId;
+    state.pendingListingContext = listing;
+    syncConversationModal();
+  }
+}
+
+async function handleMessageCenterToggle(event) {
+  event.preventDefault();
+
+  if (!state.user) {
+    return;
+  }
+
+  if (isConversationModalOpen()) {
+    closeConversationModal();
+    return;
+  }
+
+  await openConversationModal();
+}
+
 async function sendListingMessage(listingId, form, containerOverride = null) {
   if (!listingId || !form) {
     return;
   }
 
   const container =
-    containerOverride || form.closest('.conversation-modal__dialog, .listing__conversation');
+    containerOverride || form.closest('.conversation-modal__content, .conversation-modal__dialog, .listing__conversation');
   if (!container) {
     return;
   }
@@ -724,7 +1099,10 @@ async function sendListingMessage(listingId, form, containerOverride = null) {
     const conversation = storeConversation(payload) || payload;
     renderConversation(container, conversation);
     handleConversationUpdate(conversation);
-    if (elements.conversationModal && container === elements.conversationModalDialog) {
+    if (
+      elements.conversationModal &&
+      (container === elements.conversationModalContent || container === elements.conversationModalDialog)
+    ) {
       elements.conversationModal.dataset.conversationId = conversation._id || '';
     }
     if (textarea) {
@@ -758,11 +1136,20 @@ function handleListingCardClick(event) {
 
   const listing = findListingById(listingId);
   const conversation = getConversationForListing(listingId);
-  if (!canMessageListing(listing) && !conversation) {
+  const fallbackListing = listing || {
+    _id: listingId,
+    title: contactButton.dataset.listingTitle || 'Listing Conversation',
+    agent: {
+      _id: contactButton.dataset.agentId || '',
+      fullName: contactButton.dataset.agentName || 'Listing Agent'
+    }
+  };
+
+  if (!canMessageListing(fallbackListing) && !conversation) {
     return;
   }
 
-  openConversationModal({ listingId, listing, conversation });
+  openConversationModal({ listingId, listing: fallbackListing, conversation });
 }
 
 function renderAgentConversations() {
@@ -1022,6 +1409,9 @@ async function fetchAgentConversations() {
       storeConversation(conversation);
     });
     renderAgentConversations();
+    if (isConversationModalOpen()) {
+      syncConversationModal();
+    }
   } catch (error) {
     if (elements.agentMessagesContainer) {
       elements.agentMessagesContainer.innerHTML = `<div class="empty-state">${error.message}</div>`;
@@ -1046,6 +1436,9 @@ async function fetchBuyerConversations() {
       storeConversation(conversation);
     });
     renderBuyerConversations();
+    if (isConversationModalOpen()) {
+      syncConversationModal();
+    }
   } catch (error) {
     state.buyerConversations = [];
     if (elements.buyerMessagesContainer) {
@@ -1824,6 +2217,14 @@ function bootstrap() {
   if (elements.conversationModal) {
     elements.conversationModal.addEventListener('click', handleConversationModalClick);
     elements.conversationModal.addEventListener('submit', handleConversationModalSubmit);
+  }
+
+  if (elements.conversationModalList) {
+    elements.conversationModalList.addEventListener('click', handleConversationListClick);
+  }
+
+  if (elements.messageCenterToggle) {
+    elements.messageCenterToggle.addEventListener('click', handleMessageCenterToggle);
   }
 
   document.addEventListener('keydown', handleGlobalKeydown);
