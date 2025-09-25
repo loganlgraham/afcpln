@@ -507,16 +507,27 @@ async function sendConversationNotification(conversation, { senderId, messageBod
   const agent = await hydrateParticipant(conversation.agent);
   const buyer = await hydrateParticipant(conversation.buyer);
   const normalizedSenderId = resolveId(senderId);
+  const agentId = resolveId(agent);
+  const buyerId = resolveId(buyer);
 
   let recipient = agent;
   let sender = buyer;
 
-  if (normalizedSenderId && normalizedSenderId === agent._id) {
+  if (normalizedSenderId && agentId && normalizedSenderId === agentId) {
+    recipient = buyer;
+    sender = agent;
+  } else if (normalizedSenderId && buyerId && normalizedSenderId === buyerId) {
+    recipient = agent;
+    sender = buyer;
+  } else if (!recipient?.email && buyer?.email) {
     recipient = buyer;
     sender = agent;
   }
 
-  if (!recipient?.email || (sender && sender._id && recipient._id && recipient._id === sender._id)) {
+  const recipientId = resolveId(recipient);
+  const senderResolvedId = resolveId(sender);
+
+  if (!recipient?.email || (recipientId && senderResolvedId && recipientId === senderResolvedId)) {
     return;
   }
 

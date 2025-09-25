@@ -117,4 +117,32 @@ describe('emailService transport selection', () => {
       })
     );
   });
+
+  it('notifies the opposite participant when an agent replies to a buyer', async () => {
+    process.env.RESEND_API_KEY = 'test-resend-key';
+    const agentId = '64b7f1f77bcf86cd799439022';
+    const buyerId = '64b7f191e810c19729de860ff';
+
+    let sendConversationNotification;
+    jest.isolateModules(() => {
+      ({ sendConversationNotification } = require('../services/emailService'));
+    });
+
+    await sendConversationNotification(
+      {
+        agent: { _id: agentId, email: 'agent@example.com', fullName: 'Agent Example', role: 'agent' },
+        buyer: { _id: buyerId, email: 'buyer@example.com', fullName: 'Buyer Example', role: 'user' },
+        listing: { title: 'Skyline Loft', area: 'North Loop', address: { city: 'Minneapolis', state: 'MN' } }
+      },
+      { senderId: agentId, messageBody: 'Happy to set up a tour this week.' }
+    );
+
+    expect(resend.__mock.sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'buyer@example.com',
+        subject: expect.stringMatching(/new message/i),
+        text: expect.stringContaining('Happy to set up a tour this week.')
+      })
+    );
+  });
 });
