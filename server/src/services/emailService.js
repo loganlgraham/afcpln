@@ -3,29 +3,42 @@ const { Resend } = require('resend');
 const EmailLog = require('../models/EmailLog');
 const User = require('../models/User');
 
-const brandName =
-  typeof process.env.EMAIL_FROM_NAME === 'string' && process.env.EMAIL_FROM_NAME.trim()
-    ? process.env.EMAIL_FROM_NAME.trim()
-    : 'AFC Private Listings';
-
 const DEFAULT_RESEND_DOMAIN = 'lgweb.app';
-
-const hasResendConfigured = Boolean(process.env.RESEND_API_KEY);
-
-const resendDomain =
-  typeof process.env.RESEND_DOMAIN === 'string' && process.env.RESEND_DOMAIN.trim()
-    ? process.env.RESEND_DOMAIN.trim()
-    : hasResendConfigured
-      ? DEFAULT_RESEND_DOMAIN
-      : '';
-
-const fromAddress = resolveFromAddress();
-
 let activeTransport = { type: 'json' };
 let transporter;
 let resendClient;
 let fallbackTransport;
 let fallbackMetadata;
+let cachedResendKey;
+
+function getBrandName() {
+  if (typeof process.env.EMAIL_FROM_NAME === 'string' && process.env.EMAIL_FROM_NAME.trim()) {
+    return process.env.EMAIL_FROM_NAME.trim();
+  }
+
+  return 'AFC Private Listings';
+}
+
+function getResendApiKey() {
+  if (typeof process.env.RESEND_API_KEY !== 'string') {
+    return null;
+  }
+
+  const trimmed = process.env.RESEND_API_KEY.trim();
+  return trimmed ? trimmed : null;
+}
+
+function hasResendConfigured() {
+  return Boolean(getResendApiKey());
+}
+
+function getResendDomain() {
+  if (typeof process.env.RESEND_DOMAIN === 'string' && process.env.RESEND_DOMAIN.trim()) {
+    return process.env.RESEND_DOMAIN.trim();
+  }
+
+  return hasResendConfigured() ? DEFAULT_RESEND_DOMAIN : '';
+}
 
 function normalizeBool(value, fallback = false) {
   if (value === undefined || value === null || value === '') {
@@ -68,7 +81,7 @@ function formatSenderAddress(value, options = {}) {
 
   const resolvedDisplayName =
     explicitDisplayName === undefined
-      ? brandName
+      ? getBrandName()
       : typeof explicitDisplayName === 'string'
         ? explicitDisplayName.trim()
         : null;
@@ -107,9 +120,10 @@ function resolveFromAddress() {
     return explicit;
   }
 
-  if (resendDomain) {
+  const domain = getResendDomain();
+  if (domain) {
     const domainBased = pickFirstSender(
-      [`hello@${resendDomain}`, `no-reply@${resendDomain}`],
+      [`hello@${domain}`, `no-reply@${domain}`],
       { displayName: '' }
     );
     if (domainBased) {
@@ -117,7 +131,7 @@ function resolveFromAddress() {
     }
   }
 
-  if (hasResendConfigured) {
+  if (hasResendConfigured()) {
     return formatSenderAddress('hello@lgweb.app', { displayName: '' });
   }
 
@@ -169,20 +183,36 @@ function createNodemailerTransport() {
   };
 }
 
-function initializeTransport() {
-  if (hasResendConfigured) {
-    try {
-      resendClient = new Resend(process.env.RESEND_API_KEY);
-      activeTransport = { type: 'resend' };
-      return;
-    } catch (error) {
-      console.error('Failed to initialize Resend email transport, falling back to Nodemailer', error);
+function refreshActiveTransport() {
+  const resendKey = getResendApiKey();
+
+  if (resendKey) {
+    if (!resendClient || cachedResendKey !== resendKey) {
+      try {
+        resendClient = new Resend(resendKey);
+        cachedResendKey = resendKey;
+      } catch (error) {
+        console.error('Failed to initialize Resend email transport, falling back to Nodemailer', error);
+        resendClient = null;
+        cachedResendKey = null;
+      }
     }
+
+    if (resendClient) {
+      activeTransport = { type: 'resend' };
+      transporter = null;
+      return;
+    }
+  } else {
+    resendClient = null;
+    cachedResendKey = null;
   }
 
-  const nodemailerTransport = createNodemailerTransport();
-  transporter = nodemailerTransport.transporter;
-  activeTransport = nodemailerTransport.metadata;
+  if (!transporter || activeTransport.type === 'resend') {
+    const nodemailerTransport = createNodemailerTransport();
+    transporter = nodemailerTransport.transporter;
+    activeTransport = nodemailerTransport.metadata;
+  }
 }
 
 function ensureFallbackTransport() {
@@ -196,7 +226,7 @@ function ensureFallbackTransport() {
   return { transporter: fallbackTransport, metadata: fallbackMetadata };
 }
 
-initializeTransport();
+refreshActiveTransport();
 
 let loggedJsonTransportNotice = false;
 
@@ -287,7 +317,7 @@ function buildListingEmail({ user, listing, search }) {
 
   return {
     to: user.email,
-    from: fromAddress,
+    from: resolveFromAddress(),
     subject,
     text: lines.join('\n'),
     html: htmlLines.join('')
@@ -311,6 +341,8 @@ function formatTransportResponse(data) {
 }
 
 async function deliverEmail(message) {
+  refreshActiveTransport();
+
   if (activeTransport.type === 'resend' && resendClient) {
     try {
       const result = await resendClient.emails.send({
@@ -400,7 +432,7 @@ function buildRegistrationEmail(user) {
 
   return {
     to: safeUser?.email,
-    from: fromAddress,
+    from: resolveFromAddress(),
     subject,
     text: lines.join('\n'),
     html: htmlLines.join('')
@@ -566,7 +598,7 @@ function buildConversationNotificationEmail({ recipient, sender, listing, messag
 
   return {
     to: recipient.email,
-    from: fromAddress,
+    from: resolveFromAddress(),
     subject,
     text: lines.join('\n'),
     html: paragraphs.join('')
