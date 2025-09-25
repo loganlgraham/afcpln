@@ -494,53 +494,44 @@ body.listings-page .container {
 
 .card__body--stacked {
   display: grid;
-  gap: 2rem;
+  gap: 1.75rem;
 }
 
-.card__filters {
-  display: grid;
-  gap: 1.5rem;
+.card__body--stacked > .form,
+.card__body--stacked > .form-section {
   width: min(100%, 760px);
   margin: 0 auto;
 }
 
-.card__filters .form {
-  gap: 1.5rem;
+.card__body--stacked > .form-section.form-section--results {
+  width: min(100%, 960px);
 }
 
-.card__filters .form button[type='submit'] {
-  justify-self: center;
-}
-
-.card__filters .form-actions {
-  justify-content: center;
-}
-
-.card__filters--public {
+.card__body--stacked > .card__filters--public {
   width: min(100%, 800px);
 }
 
-.card__filters-header {
+.form-section__header {
   display: grid;
-  gap: 0.5rem;
-  text-align: center;
+  gap: 0.35rem;
 }
 
-.card__filters-header h3 {
-  margin: 0;
-  font-size: 1.25rem;
-  color: #102a43;
-}
-
-.card__filters-header p {
+.form-section__header p {
   margin: 0;
   font-size: 0.95rem;
   color: #486581;
 }
 
+.form-section--intro {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
 .listing-results__grid {
   border-top: 1px solid rgba(15, 23, 42, 0.08);
-  padding-top: 1.5rem;
+  margin-top: 1rem;
+  padding-top: 1.25rem;
   display: grid;
   gap: 1.5rem;
 }
@@ -1342,12 +1333,17 @@ body.conversation-modal-open {
     margin-top: -2.5rem;
   }
 
-  .card__filters {
-    gap: 1.35rem;
+  .card__body--stacked {
+    gap: 1.5rem;
   }
 
-  .card__filters .form {
-    gap: 1.25rem;
+  .card__body--stacked > .form,
+  .card__body--stacked > .form-section {
+    width: 100%;
+  }
+
+  .form--search .form-section {
+    gap: 0.9rem;
   }
 
   .listing__content {

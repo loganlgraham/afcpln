@@ -20,60 +20,67 @@
           <h2>Available Properties</h2>
           <a class="card__link" href="index.html">Filter listings</a>
         </div>
-        <p class="card__subtitle">Every property currently shared with the network appears below.</p>
         <div class="card__body card__body--stacked">
-          <div class="card__filters card__filters--public">
-            <form id="public-filters" class="form form--search">
-              <div class="card__filters-header">
-                <h3>Refine Your Search</h3>
-                <p>Dial in the criteria to focus the available properties.</p>
-              </div>
-              <div class="form-section">
-                <h3>Location Focus</h3>
-                <div class="form-grid">
-                  <label>Area
-                    <input type="text" name="area" placeholder="North Loop" />
-                  </label>
-                  <label>City
-                    <input type="text" name="city" placeholder="Minneapolis" />
-                  </label>
-                  <label>State
-                    <input type="text" name="state" placeholder="MN" maxlength="2" />
-                  </label>
-                </div>
-              </div>
-              <div class="form-section">
-                <h3>Budget</h3>
-                <div class="form-grid">
-                  <label>Min Price
-                    <input type="number" name="minPrice" min="0" step="1000" />
-                  </label>
-                  <label>Max Price
-                    <input type="number" name="maxPrice" min="0" step="1000" />
-                  </label>
-                </div>
-              </div>
-              <div class="form-section">
-                <h3>Property Details</h3>
-                <div class="form-grid">
-                  <label>Bedrooms
-                    <input type="number" name="minBedrooms" min="0" />
-                  </label>
-                  <label>Bathrooms
-                    <input type="number" name="minBathrooms" min="0" step="0.5" />
-                  </label>
-                </div>
-              </div>
-              <div class="form-actions">
-                <button type="submit" class="btn primary">Update Results</button>
-              </div>
-            </form>
-          </div>
-          <div class="listing-results__grid">
-            <div id="public-listings" class="listing-grid" aria-live="polite">
-              <div class="empty-state">Loading listings…</div>
+          <section class="form-section form-section--results">
+            <div class="form-section__header">
+              <h3>Matching Listings</h3>
+              <p class="form-section__description">
+                Every property currently shared with the network appears below.
+              </p>
             </div>
-          </div>
+            <div class="listing-results__grid">
+              <div id="public-listings" class="listing-grid" aria-live="polite">
+                <div class="empty-state">Loading listings…</div>
+              </div>
+            </div>
+          </section>
+          <form id="public-filters" class="form form--search card__filters--public" aria-labelledby="public-filters-heading">
+            <section class="form-section form-section--intro">
+              <div class="form-section__header">
+                <h3 id="public-filters-heading">Refine Your Search</h3>
+                <p class="form-section__description">Dial in the criteria to focus the available properties.</p>
+              </div>
+            </section>
+            <section class="form-section">
+              <h3>Location Focus</h3>
+              <div class="form-grid">
+                <label>Area
+                  <input type="text" name="area" placeholder="North Loop" />
+                </label>
+                <label>City
+                  <input type="text" name="city" placeholder="Minneapolis" />
+                </label>
+                <label>State
+                  <input type="text" name="state" placeholder="MN" maxlength="2" />
+                </label>
+              </div>
+            </section>
+            <section class="form-section">
+              <h3>Budget</h3>
+              <div class="form-grid">
+                <label>Min Price
+                  <input type="number" name="minPrice" min="0" step="1000" />
+                </label>
+                <label>Max Price
+                  <input type="number" name="maxPrice" min="0" step="1000" />
+                </label>
+              </div>
+            </section>
+            <section class="form-section">
+              <h3>Property Details</h3>
+              <div class="form-grid">
+                <label>Bedrooms
+                  <input type="number" name="minBedrooms" min="0" />
+                </label>
+                <label>Bathrooms
+                  <input type="number" name="minBathrooms" min="0" step="0.5" />
+                </label>
+              </div>
+            </section>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Update Results</button>
+            </div>
+          </form>
         </div>
         <p class="card__helper">Need tailored matches? <a class="card__link" href="index.html#listing-search">Return to the buyer dashboard</a>.</p>
       </section>

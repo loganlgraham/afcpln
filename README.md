@@ -59,6 +59,7 @@ cd server
 cp .env.example .env
 # Update MONGODB_URI, MONGODB_DB (if needed), JWT_SECRET, and EMAIL_FROM in .env
 # Provide SMTP_URL or SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS to deliver live email
+# Alternatively, set RESEND_API_KEY and RESEND_DOMAIN after verifying your domain at resend.com
 npm install
 npm run dev        # starts the API on http://localhost:4000
 ```
@@ -70,6 +71,8 @@ When your connection string does not include a database name (for example it end
 Likewise, the API now falls back to a built-in development JWT secret when `JWT_SECRET` is missing so you can register and sign in without any extra configuration. The server logs a warning when this happens—define a unique `JWT_SECRET` in `.env` (and in production environments) before launching to users.
 
 Email notifications default to Nodemailer’s JSON transport so you can inspect payloads during development without delivering real messages. To enable live delivery, either set `SMTP_URL` to your provider’s connection string (for example, `smtps://user:pass@smtp.sendgrid.net`) or configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS`. Toggle `SMTP_SECURE=true` for explicit TLS, or leave it blank to infer from the port. If you need to force JSON mode—even with SMTP credentials available—set `EMAIL_TRANSPORT=json`.
+
+If you prefer Resend, add `RESEND_API_KEY` (and optionally `RESEND_DOMAIN` plus `EMAIL_FROM`) to your environment. The API automatically switches to Resend when the key is present and gracefully falls back to Nodemailer if the service rejects the sender so registrations and listing notifications continue to complete.
 
 The server automatically runs database migrations via Mongoose models. The `/api/health` endpoint returns status and timestamp for quick diagnostics.
 
