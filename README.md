@@ -72,7 +72,7 @@ Likewise, the API now falls back to a built-in development JWT secret when `JWT_
 
 Email notifications default to Nodemailer’s JSON transport so you can inspect payloads during development without delivering real messages. To enable live delivery, either set `SMTP_URL` to your provider’s connection string (for example, `smtps://user:pass@smtp.sendgrid.net`) or configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS`. Toggle `SMTP_SECURE=true` for explicit TLS, or leave it blank to infer from the port. If you need to force JSON mode—even with SMTP credentials available—set `EMAIL_TRANSPORT=json`.
 
-If you prefer Resend, add `RESEND_API_KEY` (and optionally `RESEND_DOMAIN` plus `EMAIL_FROM`) to your environment. The API automatically switches to Resend when the key is present and gracefully falls back to Nodemailer if the service rejects the sender so registrations and listing notifications continue to complete.
+If you prefer Resend, add `RESEND_API_KEY` (and optionally `RESEND_DOMAIN` plus `EMAIL_FROM`) to your environment. The API automatically switches to Resend when the key is present and gracefully falls back to Nodemailer if the service rejects the sender so registrations and listing notifications continue to complete. When no sender is supplied, the service defaults to `hello@lgweb.app`, the verified domain for production messaging.
 
 The server automatically runs database migrations via Mongoose models. The `/api/health` endpoint returns status and timestamp for quick diagnostics.
 

@@ -48,7 +48,7 @@ function normalizeBool(value, fallback = false) {
   return fallback;
 }
 
-function formatSenderAddress(value) {
+function formatSenderAddress(value, options = {}) {
   if (!value) {
     return null;
   }
@@ -62,12 +62,27 @@ function formatSenderAddress(value) {
     return trimmed;
   }
 
-  return `${brandName} <${trimmed}>`;
+  const explicitDisplayName = Object.prototype.hasOwnProperty.call(options, 'displayName')
+    ? options.displayName
+    : undefined;
+
+  const resolvedDisplayName =
+    explicitDisplayName === undefined
+      ? brandName
+      : typeof explicitDisplayName === 'string'
+        ? explicitDisplayName.trim()
+        : null;
+
+  if (!resolvedDisplayName) {
+    return trimmed;
+  }
+
+  return `${resolvedDisplayName} <${trimmed}>`;
 }
 
-function pickFirstSender(candidates = []) {
+function pickFirstSender(candidates = [], options = {}) {
   for (const candidate of candidates) {
-    const formatted = formatSenderAddress(candidate);
+    const formatted = formatSenderAddress(candidate, options);
     if (formatted) {
       return formatted;
     }
@@ -77,30 +92,36 @@ function pickFirstSender(candidates = []) {
 }
 
 function resolveFromAddress() {
-  const explicit = pickFirstSender([
-    process.env.EMAIL_FROM,
-    process.env.RESEND_FROM,
-    process.env.RESEND_FROM_EMAIL,
-    process.env.RESEND_SENDER,
-    process.env.RESEND_FROM_ADDRESS
-  ]);
+  const explicit = pickFirstSender(
+    [
+      process.env.EMAIL_FROM,
+      process.env.RESEND_FROM,
+      process.env.RESEND_FROM_EMAIL,
+      process.env.RESEND_SENDER,
+      process.env.RESEND_FROM_ADDRESS
+    ],
+    { displayName: null }
+  );
 
   if (explicit) {
     return explicit;
   }
 
   if (resendDomain) {
-    const domainBased = pickFirstSender([`hello@${resendDomain}`, `no-reply@${resendDomain}`]);
+    const domainBased = pickFirstSender(
+      [`hello@${resendDomain}`, `no-reply@${resendDomain}`],
+      { displayName: '' }
+    );
     if (domainBased) {
       return domainBased;
     }
   }
 
   if (hasResendConfigured) {
-    return formatSenderAddress('onboarding@resend.dev');
+    return formatSenderAddress('hello@lgweb.app', { displayName: '' });
   }
 
-  return formatSenderAddress('no-reply@lgweb.app');
+  return formatSenderAddress('hello@lgweb.app', { displayName: '' });
 }
 
 function createNodemailerTransport() {
@@ -233,6 +254,8 @@ function buildListingEmail({ user, listing, search }) {
   const address = `${listing.address.street}, ${listing.address.city}, ${listing.address.state} ${listing.address.postalCode}`;
   const price = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(listing.price);
 
+  const description = listing.description || '';
+
   const lines = [
     `Hi ${user.fullName},`,
     '',
@@ -243,16 +266,31 @@ function buildListingEmail({ user, listing, search }) {
     `Bedrooms: ${listing.bedrooms}`,
     `Bathrooms: ${listing.bathrooms}`,
     '',
-    listing.description,
+    description,
     '',
     'Log in to view more details in the Private Listing Network.'
+  ];
+
+  const htmlLines = [
+    `<p>Hi ${user.fullName},</p>`,
+    `<p>We found a new listing that matches your "${search.name}" saved search:</p>`,
+    '<ul style="margin:0 0 1rem 1.5rem;">',
+    `<li><strong>Title:</strong> ${listing.title}</li>`,
+    `<li><strong>Address:</strong> ${address}</li>`,
+    `<li><strong>Price:</strong> ${price}</li>`,
+    `<li><strong>Bedrooms:</strong> ${listing.bedrooms}</li>`,
+    `<li><strong>Bathrooms:</strong> ${listing.bathrooms}</li>`,
+    '</ul>',
+    `<p>${description.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`,
+    '<p>Log in to view more details in the Private Listing Network.</p>'
   ];
 
   return {
     to: user.email,
     from: fromAddress,
     subject,
-    text: lines.join('\n')
+    text: lines.join('\n'),
+    html: htmlLines.join('')
   };
 }
 
@@ -279,7 +317,8 @@ async function deliverEmail(message) {
         from: message.from,
         to: message.to,
         subject: message.subject,
-        text: message.text
+        text: message.text,
+        html: message.html
       });
 
       if (result && result.error) {
@@ -340,6 +379,7 @@ function buildRegistrationEmail(user) {
   const safeUser =
     user && typeof user.toObject === 'function' ? user.toObject({ virtuals: true }) : user;
   const fullName = safeUser?.fullName || safeUser?.email || 'there';
+  const escapedFullName = fullName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const subject = 'Welcome to the AFC Private Listing Network';
 
   const lines = [
@@ -351,11 +391,19 @@ function buildRegistrationEmail(user) {
     'If you did not create this account, please ignore this email.'
   ];
 
+  const htmlLines = [
+    `<p>Hi ${escapedFullName},</p>`,
+    '<p>Thanks for joining the AFC Private Listing Network. Your account is ready to go.</p>',
+    '<p>Log in anytime to explore private listings, manage saved searches, and connect with listing agents.</p>',
+    '<p>If you did not create this account, please ignore this email.</p>'
+  ];
+
   return {
     to: safeUser?.email,
     from: fromAddress,
     subject,
-    text: lines.join('\n')
+    text: lines.join('\n'),
+    html: htmlLines.join('')
   };
 }
 
@@ -463,6 +511,7 @@ function buildConversationNotificationEmail({ recipient, sender, listing, messag
   const location = formatListingLocation(listing);
   const recipientName = recipient.fullName || 'there';
   const senderName = sender.fullName || (sender.role === 'agent' ? 'the listing agent' : 'the buyer');
+  const escapedRecipientName = recipientName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const subject = senderName
     ? `New message from ${senderName} about ${listingTitle}`
     : `New message about ${listingTitle}`;
@@ -491,11 +540,36 @@ function buildConversationNotificationEmail({ recipient, sender, listing, messag
     '— AFC Private Listings'
   );
 
+  const paragraphs = [`<p>Hi ${escapedRecipientName},</p>`];
+  const introCopy = senderName
+    ? `${senderName} just sent you a new message about ${listingTitle}.`
+    : `You have a new message about ${listingTitle}.`;
+  const escapedIntro = introCopy.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  paragraphs.push(`<p>${escapedIntro}</p>`);
+
+  if (location) {
+    const escapedLocation = location.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    paragraphs.push(`<p>${escapedLocation}</p>`);
+  }
+
+  if (message) {
+    const escapedMessage = message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    paragraphs.push(
+      `<blockquote style="margin:1rem 0;padding-left:1rem;border-left:4px solid #e1e8f0;">${escapedMessage}</blockquote>`
+    );
+  }
+
+  paragraphs.push(
+    '<p>Log in to the AFC Private Listing Network to reply and keep the conversation going.</p>',
+    '<p>— AFC Private Listings</p>'
+  );
+
   return {
     to: recipient.email,
     from: fromAddress,
     subject,
-    text: lines.join('\n')
+    text: lines.join('\n'),
+    html: paragraphs.join('')
   };
 }
 

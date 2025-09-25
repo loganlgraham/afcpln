@@ -52,8 +52,9 @@ describe('emailService transport selection', () => {
     expect(resend.__mock.sendMock).toHaveBeenCalledTimes(1);
     expect(resend.__mock.sendMock.mock.calls[0][0]).toMatchObject({
       to: 'resend-user@example.com',
-      from: 'AFC Private Listings <hello@lgweb.app>',
-      subject: expect.stringMatching(/welcome/i)
+      from: 'hello@lgweb.app',
+      subject: expect.stringMatching(/welcome/i),
+      html: expect.stringContaining('Thanks for joining')
     });
     expect(nodemailer.__mock.createTransportMock).not.toHaveBeenCalled();
   });
@@ -76,8 +77,9 @@ describe('emailService transport selection', () => {
     expect(nodemailer.__mock.sendMailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'fallback@example.com',
-        from: expect.stringContaining('AFC Private Listings'),
-        subject: expect.stringMatching(/welcome/i)
+        from: 'hello@lgweb.app',
+        subject: expect.stringMatching(/welcome/i),
+        html: expect.stringContaining('Thanks for joining')
       })
     );
   });
@@ -113,7 +115,8 @@ describe('emailService transport selection', () => {
       expect.objectContaining({
         to: 'agent@example.com',
         subject: expect.stringMatching(/new message/i),
-        text: expect.stringContaining('Is this still available?')
+        text: expect.stringContaining('Is this still available?'),
+        html: expect.stringContaining('Is this still available?')
       })
     );
   });
@@ -141,7 +144,8 @@ describe('emailService transport selection', () => {
       expect.objectContaining({
         to: 'buyer@example.com',
         subject: expect.stringMatching(/new message/i),
-        text: expect.stringContaining('Happy to set up a tour this week.')
+        text: expect.stringContaining('Happy to set up a tour this week.'),
+        html: expect.stringContaining('Happy to set up a tour this week.')
       })
     );
   });
