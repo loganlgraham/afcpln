@@ -2,5 +2,10 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/(.*)", "destination": "/client/$1" }
-  ]
+  ],
+  "env": {
+    "RESEND_API_KEY": "@resend",
+    "EMAIL_FROM": "hello@lgweb.app",
+    "RESEND_DOMAIN": "lgweb.app"
+  }
 }
