@@ -617,7 +617,26 @@ body.listings-page .container {
 }
 
 .card--listings .card__helper {
-  margin-top: 2rem;
+  margin-top: 0.75rem;
+}
+
+.card--filters .card__intro {
+  margin-bottom: 1.75rem;
+}
+
+.card--filters .form {
+  display: grid;
+  gap: 1.75rem;
+  width: min(100%, 760px);
+  margin: 1.5rem auto 0;
+}
+
+.card--filters .form-section {
+  margin: 0;
+}
+
+.card--filters .form-actions {
+  margin-top: 0.5rem;
 }
 
 .listing__image {

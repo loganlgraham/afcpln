@@ -9,6 +9,7 @@ const elements = {
   filtersForm: document.getElementById('filters'),
   listingsContainer: document.getElementById('listings'),
   listingResultsSection: document.getElementById('listing-results'),
+  listingFiltersSection: document.getElementById('listing-filters-card'),
   agentToolsSection: document.getElementById('agent-tools'),
   authSection: document.getElementById('auth-section'),
   authModal: document.getElementById('auth-modal'),
@@ -219,16 +220,33 @@ function syncDashboardLayout() {
 
   const isAgent = Boolean(state.user && state.user.role === 'agent');
   const isBuyer = Boolean(state.user && state.user.role !== 'agent');
+  const listingSections = [elements.listingResultsSection, elements.listingFiltersSection].filter(Boolean);
+  const primaryColumn = elements.dashboardPrimary;
+  const buyerAnchor =
+    elements.buyerMessagesSection &&
+    primaryColumn &&
+    elements.buyerMessagesSection.parentElement === primaryColumn
+      ? elements.buyerMessagesSection
+      : null;
 
   elements.appShell.classList.toggle('dashboard--agent', isAgent);
   elements.appShell.classList.toggle('dashboard--buyer', isBuyer);
 
   if (isAgent) {
-    if (elements.dashboardPrimary && elements.agentToolsSection) {
-      elements.dashboardPrimary.prepend(elements.agentToolsSection);
+    if (primaryColumn && elements.agentToolsSection) {
+      primaryColumn.prepend(elements.agentToolsSection);
     }
-    if (elements.dashboardPrimary && elements.listingResultsSection) {
-      elements.dashboardPrimary.append(elements.listingResultsSection);
+    if (primaryColumn && listingSections.length) {
+      listingSections.forEach((section) => {
+        if (!section) {
+          return;
+        }
+        if (buyerAnchor && buyerAnchor.parentElement === primaryColumn) {
+          primaryColumn.insertBefore(section, buyerAnchor);
+        } else {
+          primaryColumn.append(section);
+        }
+      });
     }
     return;
   }
@@ -244,8 +262,17 @@ function syncDashboardLayout() {
     );
   }
 
-  if (elements.dashboardPrimary && elements.listingResultsSection) {
-    elements.dashboardPrimary.prepend(elements.listingResultsSection);
+  if (primaryColumn && listingSections.length) {
+    listingSections.forEach((section) => {
+      if (!section) {
+        return;
+      }
+      if (buyerAnchor && buyerAnchor.parentElement === primaryColumn) {
+        primaryColumn.insertBefore(section, buyerAnchor);
+      } else {
+        primaryColumn.append(section);
+      }
+    });
   }
 }
 
@@ -262,6 +289,9 @@ function toggleSections() {
   elements.authSection.hidden = isAuthenticated;
   if (elements.listingResultsSection) {
     elements.listingResultsSection.hidden = !isAuthenticated;
+  }
+  if (elements.listingFiltersSection) {
+    elements.listingFiltersSection.hidden = !isAuthenticated;
   }
   if (elements.agentToolsSection) {
     elements.agentToolsSection.hidden = !isAuthenticated || !isAgent;
