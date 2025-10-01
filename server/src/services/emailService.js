@@ -16,7 +16,7 @@ function getBrandName() {
     return process.env.EMAIL_FROM_NAME.trim();
   }
 
-  return 'AFC Private Listings';
+  return 'LG Web';
 }
 
 function getResendApiKey() {
@@ -38,6 +38,31 @@ function getResendDomain() {
   }
 
   return hasResendConfigured() ? DEFAULT_RESEND_DOMAIN : '';
+}
+
+function getAppBaseUrl() {
+  if (typeof process.env.APP_BASE_URL === 'string' && process.env.APP_BASE_URL.trim()) {
+    return process.env.APP_BASE_URL.trim().replace(/\/$/, '');
+  }
+
+  return 'https://lgweb.app';
+}
+
+function getMessagesUrl() {
+  return `${getAppBaseUrl()}/messages`;
+}
+
+function escapeHtml(value) {
+  if (value === undefined || value === null) {
+    return '';
+  }
+
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function normalizeBool(value, fallback = false) {
@@ -133,7 +158,7 @@ function resolveFromAddress() {
     }
   }
 
-  const fallbackSender = formatSenderAddress('hello@lgweb.app', { displayName: getBrandName() });
+  const fallbackSender = formatSenderAddress('hello@lgweb.app', { displayName: '' });
   return fallbackSender || 'hello@lgweb.app';
 }
 
@@ -285,6 +310,9 @@ function buildListingEmail({ user, listing, search }) {
 
   const description = listing.description || '';
 
+  const brandName = getBrandName();
+  const appBaseUrl = getAppBaseUrl();
+
   const lines = [
     `Hi ${user.fullName},`,
     '',
@@ -297,7 +325,7 @@ function buildListingEmail({ user, listing, search }) {
     '',
     description,
     '',
-    'Log in to view more details in the Private Listing Network.'
+    `Log in at ${appBaseUrl} to view more details on ${brandName}.`
   ];
 
   const htmlLines = [
@@ -311,7 +339,7 @@ function buildListingEmail({ user, listing, search }) {
     `<li><strong>Bathrooms:</strong> ${listing.bathrooms}</li>`,
     '</ul>',
     `<p>${description.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`,
-    '<p>Log in to view more details in the Private Listing Network.</p>'
+    `<p>Log in at <a href="${appBaseUrl}">${appBaseUrl}</a> to view more details on ${escapeHtml(brandName)}.</p>`
   ];
 
   return {
@@ -411,21 +439,23 @@ function buildRegistrationEmail(user) {
     user && typeof user.toObject === 'function' ? user.toObject({ virtuals: true }) : user;
   const fullName = safeUser?.fullName || safeUser?.email || 'there';
   const escapedFullName = fullName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const subject = 'Welcome to the AFC Private Listing Network';
+  const brandName = getBrandName();
+  const appBaseUrl = getAppBaseUrl();
+  const subject = `Welcome to ${brandName}`;
 
   const lines = [
     `Hi ${fullName},`,
     '',
-    'Thanks for joining the AFC Private Listing Network. Your account is ready to go.',
-    'Log in anytime to explore private listings, manage saved searches, and connect with listing agents.',
+    `Thanks for joining ${brandName}. Your account is ready to go.`,
+    `Log in anytime at ${appBaseUrl} to explore private listings, manage saved searches, and connect with listing agents.`,
     '',
     'If you did not create this account, please ignore this email.'
   ];
 
   const htmlLines = [
     `<p>Hi ${escapedFullName},</p>`,
-    '<p>Thanks for joining the AFC Private Listing Network. Your account is ready to go.</p>',
-    '<p>Log in anytime to explore private listings, manage saved searches, and connect with listing agents.</p>',
+    `<p>Thanks for joining ${escapeHtml(brandName)}. Your account is ready to go.</p>`,
+    `<p>Log in anytime at <a href="${appBaseUrl}">${appBaseUrl}</a> to explore private listings, manage saved searches, and connect with listing agents.</p>`,
     '<p>If you did not create this account, please ignore this email.</p>'
   ];
 
@@ -546,6 +576,9 @@ function buildConversationNotificationEmail({ recipient, sender, listing, messag
   const subject = senderName
     ? `New message from ${senderName} about ${listingTitle}`
     : `New message about ${listingTitle}`;
+  const brandName = getBrandName();
+  const messagesUrl = getMessagesUrl();
+  const escapedBrandName = escapeHtml(brandName);
 
   const lines = [
     `Hi ${recipientName},`,
@@ -566,9 +599,9 @@ function buildConversationNotificationEmail({ recipient, sender, listing, messag
   }
 
   lines.push(
-    'Log in to the AFC Private Listing Network to reply and keep the conversation going.',
+    `Log in at ${messagesUrl} to reply and keep the conversation going.`,
     '',
-    '— AFC Private Listings'
+    `— ${brandName}`
   );
 
   const paragraphs = [`<p>Hi ${escapedRecipientName},</p>`];
@@ -591,8 +624,8 @@ function buildConversationNotificationEmail({ recipient, sender, listing, messag
   }
 
   paragraphs.push(
-    '<p>Log in to the AFC Private Listing Network to reply and keep the conversation going.</p>',
-    '<p>— AFC Private Listings</p>'
+    `<p>Log in at <a href="${messagesUrl}">${messagesUrl}</a> to reply and keep the conversation going.</p>`,
+    `<p>— ${escapedBrandName}</p>`
   );
 
   return {
