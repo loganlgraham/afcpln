@@ -52,7 +52,7 @@ describe('emailService transport selection', () => {
     expect(resend.__mock.sendMock).toHaveBeenCalledTimes(1);
     expect(resend.__mock.sendMock.mock.calls[0][0]).toMatchObject({
       to: 'resend-user@example.com',
-      from: 'hello@lgweb.app',
+      from: 'AFC Private Listings <hello@lgweb.app>',
       subject: expect.stringMatching(/welcome/i),
       html: expect.stringContaining('Thanks for joining')
     });
@@ -77,7 +77,7 @@ describe('emailService transport selection', () => {
     expect(nodemailer.__mock.sendMailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'fallback@example.com',
-        from: 'hello@lgweb.app',
+        from: 'AFC Private Listings <hello@lgweb.app>',
         subject: expect.stringMatching(/welcome/i),
         html: expect.stringContaining('Thanks for joining')
       })

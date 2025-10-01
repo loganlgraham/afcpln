@@ -79,12 +79,14 @@ function formatSenderAddress(value, options = {}) {
     ? options.displayName
     : undefined;
 
-  const resolvedDisplayName =
-    explicitDisplayName === undefined
-      ? getBrandName()
-      : typeof explicitDisplayName === 'string'
-        ? explicitDisplayName.trim()
-        : null;
+  let resolvedDisplayName;
+  if (explicitDisplayName === undefined) {
+    resolvedDisplayName = getBrandName();
+  } else if (typeof explicitDisplayName === 'string') {
+    resolvedDisplayName = explicitDisplayName.trim();
+  } else {
+    resolvedDisplayName = null;
+  }
 
   if (!resolvedDisplayName) {
     return trimmed;
@@ -113,7 +115,7 @@ function resolveFromAddress() {
       process.env.RESEND_SENDER,
       process.env.RESEND_FROM_ADDRESS
     ],
-    { displayName: null }
+    { displayName: process.env.EMAIL_FROM_NAME }
   );
 
   if (explicit) {
@@ -124,18 +126,15 @@ function resolveFromAddress() {
   if (domain) {
     const domainBased = pickFirstSender(
       [`hello@${domain}`, `no-reply@${domain}`],
-      { displayName: '' }
+      { displayName: getBrandName() }
     );
     if (domainBased) {
       return domainBased;
     }
   }
 
-  if (hasResendConfigured()) {
-    return formatSenderAddress('hello@lgweb.app', { displayName: '' });
-  }
-
-  return formatSenderAddress('hello@lgweb.app', { displayName: '' });
+  const fallbackSender = formatSenderAddress('hello@lgweb.app', { displayName: getBrandName() });
+  return fallbackSender || 'hello@lgweb.app';
 }
 
 function createNodemailerTransport() {
