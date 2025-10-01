@@ -1,0 +1,10 @@
+{
+  "name": "afcpln",
+  "private": true,
+  "workspaces": ["server"],
+  "scripts": {
+    "dev": "npm run dev --workspace server",
+    "start": "npm run start --workspace server",
+    "test": "npm run test --workspace server"
+  }
+}

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AFC Private Listing Network</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero__content">
+        <h1>Private Listing Network</h1>
+        <p>Connect listing agents with motivated buyers in the AFC &amp; AHA communities.</p>
+      </div>
+      <div id="user-status" class="hero__status"></div>
+    </header>
+
+    <main class="container">
+      <section class="card" id="auth-section">
+        <h2>Access the Network</h2>
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="login" role="tab">Login</button>
+          <button class="tab" data-tab="register" role="tab">Register</button>
+        </div>
+        <div class="tab-content active" id="login" role="tabpanel">
+          <form id="login-form" class="form">
+            <label>
+              Email
+              <input type="email" name="email" required />
+            </label>
+            <label>
+              Password
+              <input type="password" name="password" required />
+            </label>
+            <button type="submit" class="btn primary">Login</button>
+          </form>
+        </div>
+        <div class="tab-content" id="register" role="tabpanel">
+          <form id="register-form" class="form">
+            <label>
+              Full Name
+              <input type="text" name="fullName" required />
+            </label>
+            <label>
+              Email
+              <input type="email" name="email" required />
+            </label>
+            <label>
+              Password
+              <input type="password" name="password" required minlength="8" />
+            </label>
+            <label>
+              Role
+              <select name="role">
+                <option value="user">Buyer / Investor</option>
+                <option value="agent">Listing Agent</option>
+              </select>
+            </label>
+            <label class="optional" data-role="agent">
+              Brokerage / Company (agents only)
+              <input type="text" name="company" placeholder="AFC Realty" />
+            </label>
+            <button type="submit" class="btn primary">Create Account</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="card" id="listing-search" hidden>
+        <h2>Find Private Listings</h2>
+        <p class="card__subtitle">Refine the map to surface the latest off-market opportunities.</p>
+        <div class="form-section form-section--results">
+          <h3>Matching Listings</h3>
+          <p class="form-section__description">Newest opportunities that meet your filters will surface here first.</p>
+          <div id="listings" class="listing-grid" aria-live="polite"></div>
+        </div>
+        <form id="filters" class="form form--search">
+          <div class="form-section">
+            <h3>Location Focus</h3>
+            <div class="form-grid">
+              <label>Area
+                <input type="text" name="area" placeholder="North Loop" />
+              </label>
+              <label>City
+                <input type="text" name="city" placeholder="Minneapolis" />
+              </label>
+              <label>State
+                <input type="text" name="state" placeholder="MN" maxlength="2" />
+              </label>
+            </div>
+          </div>
+          <div class="form-section">
+            <h3>Budget</h3>
+            <div class="form-grid">
+              <label>Min Price
+                <input type="number" name="minPrice" min="0" step="1000" />
+              </label>
+              <label>Max Price
+                <input type="number" name="maxPrice" min="0" step="1000" />
+              </label>
+            </div>
+          </div>
+          <div class="form-section">
+            <h3>Property Details</h3>
+            <div class="form-grid">
+              <label>Bedrooms
+                <input type="number" name="minBedrooms" min="0" />
+              </label>
+              <label>Bathrooms
+                <input type="number" name="minBathrooms" min="0" step="0.5" />
+              </label>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Apply Filters</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card" id="agent-tools" hidden>
+        <h2>List a Property</h2>
+        <form id="listing-form" class="form">
+          <div class="form-section">
+            <h3>Listing Essentials</h3>
+            <div class="form-grid">
+              <label>Title
+                <input type="text" name="title" placeholder="Modern Downtown Condo" required />
+              </label>
+              <label>Area / Neighborhood
+                <input type="text" name="area" placeholder="North Loop" required />
+              </label>
+            </div>
+            <div class="form-grid">
+              <label>Price
+                <input type="number" name="price" min="0" step="1000" required />
+              </label>
+              <label>Bedrooms
+                <input type="number" name="bedrooms" min="0" required />
+              </label>
+              <label>Bathrooms
+                <input type="number" name="bathrooms" min="0" step="0.5" required />
+              </label>
+              <label>Square Feet
+                <input type="number" name="squareFeet" min="0" step="50" />
+              </label>
+            </div>
+            <label>Description
+              <textarea name="description" rows="4" placeholder="Highlight the best features and nearby amenities." required></textarea>
+            </label>
+            <label class="file-input">Property Photos
+              <input type="file" name="photos" accept="image/*" multiple />
+              <span class="form-hint">Upload a few images to help buyers preview the space.</span>
+              <div id="listing-photo-previews" class="photo-previews" hidden aria-live="polite"></div>
+            </label>
+          </div>
+          <div class="form-section">
+            <h3>Property Address</h3>
+            <div class="form-grid">
+              <label>Street
+                <input type="text" name="street" required />
+              </label>
+              <label>City
+                <input type="text" name="city" required />
+              </label>
+              <label>State
+                <input type="text" name="state" required maxlength="2" />
+              </label>
+              <label>Postal Code
+                <input type="text" name="postalCode" required />
+              </label>
+            </div>
+          </div>
+          <div class="form-section">
+            <h3>Buyer Highlights</h3>
+            <label>Features (comma separated)
+              <input type="text" name="features" placeholder="Heated garage, rooftop deck" />
+            </label>
+          </div>
+          <button type="submit" class="btn primary">Publish Listing</button>
+        </form>
+      </section>
+
+      <section class="card" id="saved-searches" hidden>
+        <h2>Saved Searches</h2>
+        <form id="saved-search-form" class="form">
+          <div class="form-section">
+            <h3>Search Overview</h3>
+            <div class="form-grid">
+              <label>Search Name
+                <input type="text" name="name" placeholder="North Loop Condos" required />
+              </label>
+              <label>Areas (comma separated)
+                <input type="text" name="areas" placeholder="North Loop, Downtown" required />
+              </label>
+            </div>
+          </div>
+          <div class="form-section">
+            <h3>Desired Ranges</h3>
+            <div class="form-grid">
+              <label>Min Price
+                <input type="number" name="minPrice" min="0" step="1000" />
+              </label>
+              <label>Max Price
+                <input type="number" name="maxPrice" min="0" step="1000" />
+              </label>
+              <label>Min Bedrooms
+                <input type="number" name="minBedrooms" min="0" />
+              </label>
+              <label>Min Bathrooms
+                <input type="number" name="minBathrooms" min="0" step="0.5" />
+              </label>
+            </div>
+          </div>
+          <div class="form-section">
+            <h3>Keyword Focus</h3>
+            <label>Keywords (optional)
+              <input type="text" name="keywords" placeholder="loft, balcony" />
+            </label>
+          </div>
+          <button type="submit" class="btn primary">Save Search</button>
+        </form>
+        <div id="saved-search-list" class="saved-search-list" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <template id="listing-template">
+      <article class="listing">
+        <figure class="listing__image" hidden>
+          <img src="" alt="" loading="lazy" />
+        </figure>
+        <div class="listing__content">
+          <div class="listing__header">
+            <h3 class="listing__title"></h3>
+            <span class="listing__price"></span>
+          </div>
+          <p class="listing__meta"></p>
+          <p class="listing__description"></p>
+          <p class="listing__agent"></p>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
