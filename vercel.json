@@ -4,6 +4,8 @@
     { "source": "/(.*)", "destination": "/client/$1" }
   ],
   "env": {
-    "RESEND_API_KEY": "re_XKydcFAi_NExi6WBxsNN6RGvq7EvfeJRV"
+    "RESEND_API_KEY": "@resend",
+    "EMAIL_FROM": "hello@lgweb.app",
+    "RESEND_DOMAIN": "lgweb.app"
   }
 }
