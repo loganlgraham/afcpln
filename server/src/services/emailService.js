@@ -3,7 +3,9 @@ const { Resend } = require('resend');
 const EmailLog = require('../models/EmailLog');
 const User = require('../models/User');
 
-const DEFAULT_RESEND_DOMAIN = 'lgweb.app';
+const DEFAULT_EMAIL_DOMAIN = 'lgweb.app';
+const DEFAULT_FROM_EMAIL = `hello@${DEFAULT_EMAIL_DOMAIN}`;
+const DEFAULT_RESEND_DOMAIN = DEFAULT_EMAIL_DOMAIN;
 let activeTransport = { type: 'json' };
 let transporter;
 let resendClient;
@@ -37,7 +39,15 @@ function getResendDomain() {
     return process.env.RESEND_DOMAIN.trim();
   }
 
-  return hasResendConfigured() ? DEFAULT_RESEND_DOMAIN : '';
+  if (hasResendConfigured()) {
+    return DEFAULT_RESEND_DOMAIN;
+  }
+
+  if (typeof process.env.EMAIL_DOMAIN === 'string' && process.env.EMAIL_DOMAIN.trim()) {
+    return process.env.EMAIL_DOMAIN.trim();
+  }
+
+  return DEFAULT_EMAIL_DOMAIN;
 }
 
 function normalizeBool(value, fallback = false) {
@@ -133,8 +143,8 @@ function resolveFromAddress() {
     }
   }
 
-  const fallbackSender = formatSenderAddress('hello@lgweb.app', { displayName: getBrandName() });
-  return fallbackSender || 'hello@lgweb.app';
+  const fallbackSender = formatSenderAddress(DEFAULT_FROM_EMAIL, { displayName: getBrandName() });
+  return fallbackSender || DEFAULT_FROM_EMAIL;
 }
 
 function createNodemailerTransport() {
