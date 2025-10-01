@@ -2,5 +2,8 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/(.*)", "destination": "/client/$1" }
-  ]
+  ],
+  "env": {
+    "RESEND_API_KEY": "re_XKydcFAi_NExi6WBxsNN6RGvq7EvfeJRV"
+  }
 }
