@@ -335,6 +335,129 @@ async function sendListingMatchEmail(user, listing, search) {
   });
 }
 
+function toSafeUser(user) {
+  if (!user) {
+    return null;
+  }
+
+  if (typeof user.toObject === 'function') {
+    return user.toObject({ virtuals: true });
+  }
+
+  return user;
+}
+
+function toSafeListing(listing) {
+  if (!listing) {
+    return null;
+  }
+
+  if (typeof listing.toObject === 'function') {
+    return listing.toObject({ virtuals: true });
+  }
+
+  return listing;
+}
+
+function resolveDisplayName(user) {
+  if (!user) {
+    return 'AFC Private Listing Network member';
+  }
+
+  return user.fullName || user.email || 'AFC Private Listing Network member';
+}
+
+function buildMessageNotificationEmail({ sender, recipient, listing, message, agent, buyer }) {
+  const safeSender = toSafeUser(sender) || {};
+  const safeRecipient = toSafeUser(recipient) || {};
+  const safeListing = toSafeListing(listing) || {};
+  const safeAgent = toSafeUser(agent) || null;
+  const safeBuyer = toSafeUser(buyer) || null;
+
+  const senderName = resolveDisplayName(safeSender);
+  const recipientName = resolveDisplayName(safeRecipient);
+  const senderEmail = safeSender.email || '';
+  const listingTitle = safeListing.title || '';
+
+  let subject;
+  if (listingTitle) {
+    subject = `${senderName} messaged you about ${listingTitle}`;
+  } else {
+    subject = `${senderName} sent you a new message`;
+  }
+
+  const introLine = `${senderName} sent you a new message${listingTitle ? ` about "${listingTitle}"` : ''} on the AFC Private Listing Network.`;
+  const lines = [`Hi ${recipientName},`, '', introLine, ''];
+
+  const bodyText = message?.body ? String(message.body).trim() : '';
+  if (bodyText) {
+    lines.push(bodyText, '');
+  }
+
+  if (listingTitle) {
+    const areaDetails = [safeListing.address?.city, safeListing.address?.state].filter(Boolean).join(', ');
+    if (areaDetails) {
+      lines.push(`Listing area: ${areaDetails}`);
+    }
+    lines.push(`Listing reference: ${listingTitle}`, '');
+  }
+
+  if (safeAgent && safeAgent.email) {
+    lines.push(`Agent: ${resolveDisplayName(safeAgent)} (${safeAgent.email})`);
+  } else if (safeAgent) {
+    lines.push(`Agent: ${resolveDisplayName(safeAgent)}`);
+  }
+
+  if (safeBuyer && safeBuyer.email) {
+    lines.push(`Buyer: ${resolveDisplayName(safeBuyer)} (${safeBuyer.email})`);
+  } else if (safeBuyer) {
+    lines.push(`Buyer: ${resolveDisplayName(safeBuyer)}`);
+  }
+
+  if (senderEmail) {
+    lines.push('', `You can reply directly to ${senderEmail} or respond from your AFC Private Listing Network dashboard.`);
+  } else {
+    lines.push('', 'Log in to your AFC Private Listing Network dashboard to respond.');
+  }
+
+  return {
+    to: safeRecipient.email,
+    from: fromAddress,
+    subject,
+    text: lines.join('\n')
+  };
+}
+
+async function sendMessageNotificationEmail({ message, sender, recipient, listing, agent, buyer }) {
+  const email = buildMessageNotificationEmail({ sender, recipient, listing, message, agent, buyer });
+
+  if (!email.to) {
+    return;
+  }
+
+  const delivery = await deliverEmail(email);
+  const recipientId =
+    (recipient && recipient._id) ||
+    (message && message.recipient && message.recipient._id) ||
+    (message && message.recipient) ||
+    undefined;
+  const listingId =
+    (listing && listing._id) ||
+    (message && message.listing && message.listing._id) ||
+    (message && message.listing) ||
+    undefined;
+  await EmailLog.create({
+    user: recipientId,
+    listing: listingId,
+    message: message && message._id ? message._id : undefined,
+    searchName: listing && listing.title ? `message:${listing.title}` : 'message',
+    to: email.to,
+    subject: email.subject,
+    body: email.text,
+    transportResponse: formatTransportResponse(delivery)
+  });
+}
+
 function buildRegistrationEmail(user) {
   const safeUser =
     user && typeof user.toObject === 'function' ? user.toObject({ virtuals: true }) : user;
@@ -369,6 +492,7 @@ async function sendRegistrationEmail(user) {
 
 module.exports = {
   sendListingMatchEmail,
-  sendRegistrationEmail
+  sendRegistrationEmail,
+  sendMessageNotificationEmail
 };
 

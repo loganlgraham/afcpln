@@ -6,6 +6,7 @@ const fs = require('fs');
 const authRoutes = require('./routes/auth');
 const listingRoutes = require('./routes/listings');
 const userRoutes = require('./routes/users');
+const messageRoutes = require('./routes/messages');
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/messages', messageRoutes);
 
 const clientDir = path.resolve(__dirname, '..', '..', 'client');
 if (process.env.SERVE_CLIENT !== 'false' && fs.existsSync(clientDir)) {
