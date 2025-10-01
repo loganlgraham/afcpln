@@ -5,6 +5,7 @@
   ],
   "env": {
     "RESEND_API_KEY": "@resend",
+    "EMAIL_DOMAIN": "lgweb.app",
     "EMAIL_FROM": "hello@lgweb.app",
     "RESEND_DOMAIN": "lgweb.app"
   }

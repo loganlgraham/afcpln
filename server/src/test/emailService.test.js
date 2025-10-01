@@ -36,6 +36,7 @@ describe('emailService transport selection', () => {
     delete process.env.RESEND_SENDER;
     delete process.env.RESEND_FROM_ADDRESS;
     delete process.env.RESEND_DOMAIN;
+    delete process.env.EMAIL_DOMAIN;
     delete process.env.EMAIL_FROM_NAME;
   });
 
@@ -114,6 +115,7 @@ describe('emailService transport selection', () => {
     expect(resend.__mock.sendMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'agent@example.com',
+        from: 'AFC Private Listings <hello@lgweb.app>',
         subject: expect.stringMatching(/new message/i),
         text: expect.stringContaining('Is this still available?'),
         html: expect.stringContaining('Is this still available?')
@@ -143,6 +145,7 @@ describe('emailService transport selection', () => {
     expect(resend.__mock.sendMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'buyer@example.com',
+        from: 'AFC Private Listings <hello@lgweb.app>',
         subject: expect.stringMatching(/new message/i),
         text: expect.stringContaining('Happy to set up a tour this week.'),
         html: expect.stringContaining('Happy to set up a tour this week.')
