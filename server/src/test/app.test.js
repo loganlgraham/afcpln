@@ -222,6 +222,8 @@ describe('AFCPLN API', () => {
     expect(listingRes.status).toBe(201);
     const listingId = listingRes.body._id;
 
+    const emailCountAfterListing = sendMailMock.mock.calls.length;
+
     const messageRes = await request(app)
       .post('/api/conversations')
       .set('Authorization', `Bearer ${buyerRes.body.token}`)
@@ -230,6 +232,11 @@ describe('AFCPLN API', () => {
     expect(messageRes.status).toBe(201);
     expect(messageRes.body.messages).toHaveLength(1);
     expect(messageRes.body.messages[0].body).toContain('available');
+    expect(sendMailMock).toHaveBeenCalledTimes(emailCountAfterListing + 1);
+    const firstConversationEmail = sendMailMock.mock.calls[sendMailMock.mock.calls.length - 1][0];
+    expect(firstConversationEmail.to).toBe(agentEmail);
+    expect(firstConversationEmail.subject).toMatch(/new message/i);
+    expect(firstConversationEmail.text).toContain('Is this loft still available?');
 
     const agentConversationList = await request(app)
       .get('/api/conversations')
@@ -247,6 +254,11 @@ describe('AFCPLN API', () => {
     expect(replyRes.status).toBe(200);
     expect(replyRes.body.messages).toHaveLength(2);
     expect(replyRes.body.messages[1].body).toContain('tour');
+    expect(sendMailMock).toHaveBeenCalledTimes(emailCountAfterListing + 2);
+    const replyNotification = sendMailMock.mock.calls[sendMailMock.mock.calls.length - 1][0];
+    expect(replyNotification.to).toBe(userEmail);
+    expect(replyNotification.subject).toMatch(/new message/i);
+    expect(replyNotification.text).toContain('let us know when you would like to tour');
 
     const buyerConversationList = await request(app)
       .get('/api/conversations')
